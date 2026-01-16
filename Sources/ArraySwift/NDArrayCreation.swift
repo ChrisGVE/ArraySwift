@@ -61,19 +61,32 @@ extension NDArray {
     public static func arange(start: Double = 0, stop: Double, step: Double = 1) -> NDArray {
         guard step != 0 else { return NDArray(shape: [0], data: []) }
 
-        var values: [Double] = []
+        // Calculate count to avoid floating-point accumulation errors
+        let count: Int
         if step > 0 {
-            var current = start
-            while current < stop {
-                values.append(current)
-                current += step
-            }
+            count = Swift.max(0, Int(Darwin.ceil((stop - start) / step)))
         } else {
-            var current = start
-            while current > stop {
-                values.append(current)
-                current += step
-            }
+            count = Swift.max(0, Int(Darwin.ceil((start - stop) / (-step))))
+        }
+
+        guard count > 0 else { return NDArray(shape: [0], data: []) }
+
+        // Use index-based calculation to avoid accumulation errors
+        var values = [Double](repeating: 0, count: count)
+        for i in 0..<count {
+            let value = start + Double(i) * step
+            // Only include values that are strictly within range
+            if step > 0 && value >= stop { break }
+            if step < 0 && value <= stop { break }
+            values[i] = value
+        }
+
+        // Trim to actual count if we broke early
+        let actualCount = values.prefix { val in
+            step > 0 ? (val < stop) : (val > stop)
+        }.count
+        if actualCount < count {
+            values = Array(values.prefix(actualCount))
         }
 
         return NDArray(shape: [values.count], data: values)

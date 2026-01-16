@@ -98,7 +98,8 @@ extension NDArray {
             newStrides[i] = newStrides[i + 1] * newShape[i + 1]
         }
 
-        var newData = [Double](repeating: 0, count: newSize)
+        var newReal = [Double](repeating: 0, count: newSize)
+        var newImag: [Double]? = isComplex ? [Double](repeating: 0, count: newSize) : nil
 
         // Reorder data
         for i in 0..<newSize {
@@ -116,10 +117,16 @@ extension NDArray {
                 oldFlatIdx += newIndices[d] * oldStrides[axes[d]]
             }
 
-            newData[i] = real[oldFlatIdx]
+            newReal[i] = real[oldFlatIdx]
+            if isComplex, let imagPart = imag {
+                newImag![i] = imagPart[oldFlatIdx]
+            }
         }
 
-        return NDArray(shape: newShape, data: newData)
+        if isComplex {
+            return NDArray(shape: newShape, dtype: .complex128, real: newReal, imag: newImag)
+        }
+        return NDArray(shape: newShape, data: newReal)
     }
 
     /// Swap two axes.

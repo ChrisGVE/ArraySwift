@@ -380,6 +380,26 @@ final class NDArrayTests: XCTestCase {
         XCTAssertEqual(b.real[2], 2)  // [1,0]
     }
 
+    func testComplexTranspose() {
+        // Create 2x3 complex array
+        let a = NDArray.complexArray(
+            shape: [2, 3],
+            real: [1.0, 2.0, 3.0, 4.0, 5.0, 6.0],
+            imag: [10.0, 20.0, 30.0, 40.0, 50.0, 60.0]
+        )
+        let b = a.transpose()
+        XCTAssertEqual(b.shape, [3, 2])
+        XCTAssertTrue(b.isComplex)
+        // Original: [[1+10i, 2+20i, 3+30i], [4+40i, 5+50i, 6+60i]]
+        // Transposed: [[1+10i, 4+40i], [2+20i, 5+50i], [3+30i, 6+60i]]
+        XCTAssertEqual(b.real[0], 1)   // [0,0] real
+        XCTAssertEqual(b.imag![0], 10) // [0,0] imag
+        XCTAssertEqual(b.real[1], 4)   // [0,1] real
+        XCTAssertEqual(b.imag![1], 40) // [0,1] imag
+        XCTAssertEqual(b.real[2], 2)   // [1,0] real
+        XCTAssertEqual(b.imag![2], 20) // [1,0] imag
+    }
+
     func testConcatenate() {
         let a = NDArray([1.0, 2.0, 3.0])
         let b = NDArray([4.0, 5.0, 6.0])
