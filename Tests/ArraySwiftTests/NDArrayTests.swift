@@ -706,4 +706,120 @@ final class NDArrayTests: XCTestCase {
         XCTAssertEqual(sum1.real, [3, 7])  // 1+2, 3+4
         XCTAssertEqual(sum1.imag, [11, 15])  // 5+6, 7+8
     }
+
+    // MARK: - Subscript Tests
+
+    func testSubscript1D() {
+        var a = NDArray([1.0, 2.0, 3.0, 4.0, 5.0])
+
+        // Get
+        XCTAssertEqual(a[0], 1.0)
+        XCTAssertEqual(a[2], 3.0)
+        XCTAssertEqual(a[4], 5.0)
+
+        // Set
+        a[1] = 10.0
+        XCTAssertEqual(a[1], 10.0)
+    }
+
+    func testSubscript2D() {
+        var a = NDArray([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]])  // 2x3
+
+        // Get
+        XCTAssertEqual(a[0, 0], 1.0)
+        XCTAssertEqual(a[0, 2], 3.0)
+        XCTAssertEqual(a[1, 1], 5.0)
+
+        // Set
+        a[1, 0] = 100.0
+        XCTAssertEqual(a[1, 0], 100.0)
+    }
+
+    func testSubscript3D() {
+        let a = NDArray([[[1.0, 2.0], [3.0, 4.0]], [[5.0, 6.0], [7.0, 8.0]]])  // 2x2x2
+
+        // Get
+        XCTAssertEqual(a[0, 0, 0], 1.0)
+        XCTAssertEqual(a[0, 1, 1], 4.0)
+        XCTAssertEqual(a[1, 1, 0], 7.0)
+    }
+
+    func testSubscriptArrayIndices() {
+        let a = NDArray([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]])  // 2x3
+
+        XCTAssertEqual(a[[0, 0]], 1.0)
+        XCTAssertEqual(a[[0, 2]], 3.0)
+        XCTAssertEqual(a[[1, 1]], 5.0)
+    }
+
+    func testSubscriptRowColumn() {
+        let a = NDArray([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]])  // 2x3
+
+        // Row access
+        let row0 = a[row: 0]
+        XCTAssertEqual(row0.shape, [3])
+        XCTAssertEqual(row0.real, [1, 2, 3])
+
+        let row1 = a[row: 1]
+        XCTAssertEqual(row1.real, [4, 5, 6])
+
+        // Column access
+        let col0 = a[col: 0]
+        XCTAssertEqual(col0.shape, [2])
+        XCTAssertEqual(col0.real, [1, 4])
+
+        let col2 = a[col: 2]
+        XCTAssertEqual(col2.real, [3, 6])
+    }
+
+    func testSubscriptRange1D() {
+        let a = NDArray([1.0, 2.0, 3.0, 4.0, 5.0])
+
+        let slice = a[1..<4]
+        XCTAssertEqual(slice.shape, [3])
+        XCTAssertEqual(slice.real, [2, 3, 4])
+    }
+
+    func testSubscriptRange2D() {
+        let a = NDArray([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0], [7.0, 8.0, 9.0]])  // 3x3
+
+        let slice = a[0..<2, 1..<3]
+        XCTAssertEqual(slice.shape, [2, 2])
+        XCTAssertEqual(slice.real, [2, 3, 5, 6])
+    }
+
+    func testSubscriptComplex() {
+        var a = NDArray.complexArray(shape: [3], real: [1.0, 2.0, 3.0], imag: [4.0, 5.0, 6.0])
+
+        // Get complex element
+        let elem = a[complex: 1]
+        XCTAssertEqual(elem.real, 2.0)
+        XCTAssertEqual(elem.imag, 5.0)
+
+        // Set complex element
+        a[complex: 0] = (real: 10.0, imag: 20.0)
+        let updated = a[complex: 0]
+        XCTAssertEqual(updated.real, 10.0)
+        XCTAssertEqual(updated.imag, 20.0)
+    }
+
+    func testSubscriptComplexRowColumn() {
+        let a = NDArray.complexArray(
+            shape: [2, 2],
+            real: [1.0, 2.0, 3.0, 4.0],
+            imag: [5.0, 6.0, 7.0, 8.0]
+        )
+
+        // Row access
+        let row0 = a[row: 0]
+        XCTAssertTrue(row0.isComplex)
+        XCTAssertEqual(row0.real, [1, 2])
+        XCTAssertEqual(row0.imag, [5, 6])
+
+        // Column access
+        let col1 = a[col: 1]
+        XCTAssertTrue(col1.isComplex)
+        XCTAssertEqual(col1.real, [2, 4])
+        XCTAssertEqual(col1.imag, [6, 8])
+    }
 }

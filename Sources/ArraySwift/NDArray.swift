@@ -207,6 +207,156 @@ public struct NDArray: Sendable {
             imag: [Double](repeating: 0, count: size)
         )
     }
+
+    // MARK: - Subscript Operators
+
+    /// Access element at flat index (1D arrays or linear access)
+    public subscript(index: Int) -> Double {
+        get { real[index] }
+        set { real[index] = newValue }
+    }
+
+    /// Access element at 2D indices
+    public subscript(row: Int, col: Int) -> Double {
+        get {
+            precondition(ndim == 2, "2D subscript requires 2D array")
+            return real[row * shape[1] + col]
+        }
+        set {
+            precondition(ndim == 2, "2D subscript requires 2D array")
+            real[row * shape[1] + col] = newValue
+        }
+    }
+
+    /// Access element at 3D indices
+    public subscript(d0: Int, d1: Int, d2: Int) -> Double {
+        get {
+            precondition(ndim == 3, "3D subscript requires 3D array")
+            return real[d0 * strides[0] + d1 * strides[1] + d2]
+        }
+        set {
+            precondition(ndim == 3, "3D subscript requires 3D array")
+            real[d0 * strides[0] + d1 * strides[1] + d2] = newValue
+        }
+    }
+
+    /// Access element at N-dimensional indices
+    public subscript(indices: [Int]) -> Double {
+        get {
+            precondition(indices.count == ndim, "Index count must match dimensions")
+            return real[flatIndex(indices)]
+        }
+        set {
+            precondition(indices.count == ndim, "Index count must match dimensions")
+            real[flatIndex(indices)] = newValue
+        }
+    }
+
+    /// Access row slice from 2D array
+    public subscript(row row: Int) -> NDArray {
+        get {
+            precondition(ndim == 2, "Row subscript requires 2D array")
+            let cols = shape[1]
+            let start = row * cols
+            let rowData = Array(real[start..<start + cols])
+            if isComplex, let imagPart = imag {
+                let rowImag = Array(imagPart[start..<start + cols])
+                return NDArray(shape: [cols], dtype: .complex128, real: rowData, imag: rowImag)
+            }
+            return NDArray(shape: [cols], data: rowData)
+        }
+    }
+
+    /// Access column slice from 2D array
+    public subscript(col col: Int) -> NDArray {
+        get {
+            precondition(ndim == 2, "Column subscript requires 2D array")
+            let rows = shape[0]
+            let cols = shape[1]
+            var colData = [Double](repeating: 0, count: rows)
+            for i in 0..<rows {
+                colData[i] = real[i * cols + col]
+            }
+            if isComplex, let imagPart = imag {
+                var colImag = [Double](repeating: 0, count: rows)
+                for i in 0..<rows {
+                    colImag[i] = imagPart[i * cols + col]
+                }
+                return NDArray(shape: [rows], dtype: .complex128, real: colData, imag: colImag)
+            }
+            return NDArray(shape: [rows], data: colData)
+        }
+    }
+
+    /// Access range of elements (1D slice)
+    public subscript(range: Range<Int>) -> NDArray {
+        get {
+            let sliceData = Array(real[range])
+            if isComplex, let imagPart = imag {
+                let sliceImag = Array(imagPart[range])
+                return NDArray(shape: [sliceData.count], dtype: .complex128, real: sliceData, imag: sliceImag)
+            }
+            return NDArray(shape: [sliceData.count], data: sliceData)
+        }
+    }
+
+    /// Access sub-matrix with row and column ranges
+    public subscript(rowRange: Range<Int>, colRange: Range<Int>) -> NDArray {
+        get {
+            precondition(ndim == 2, "Range subscript requires 2D array")
+            let cols = shape[1]
+            let newRows = rowRange.count
+            let newCols = colRange.count
+            var resultData = [Double](repeating: 0, count: newRows * newCols)
+            var resultImag: [Double]? = isComplex ? [Double](repeating: 0, count: newRows * newCols) : nil
+
+            var idx = 0
+            for r in rowRange {
+                for c in colRange {
+                    resultData[idx] = real[r * cols + c]
+                    if isComplex, let imagPart = imag {
+                        resultImag![idx] = imagPart[r * cols + c]
+                    }
+                    idx += 1
+                }
+            }
+
+            if isComplex {
+                return NDArray(shape: [newRows, newCols], dtype: .complex128, real: resultData, imag: resultImag)
+            }
+            return NDArray(shape: [newRows, newCols], data: resultData)
+        }
+    }
+
+    /// Access complex element at flat index, returning tuple
+    public subscript(complex index: Int) -> (real: Double, imag: Double) {
+        get {
+            (real[index], imag?[index] ?? 0)
+        }
+        set {
+            real[index] = newValue.real
+            if isComplex {
+                imag?[index] = newValue.imag
+            }
+        }
+    }
+
+    /// Access complex element at 2D indices, returning tuple
+    public subscript(complex row: Int, _ col: Int) -> (real: Double, imag: Double) {
+        get {
+            precondition(ndim == 2, "2D subscript requires 2D array")
+            let idx = row * shape[1] + col
+            return (real[idx], imag?[idx] ?? 0)
+        }
+        set {
+            precondition(ndim == 2, "2D subscript requires 2D array")
+            let idx = row * shape[1] + col
+            real[idx] = newValue.real
+            if isComplex {
+                imag?[idx] = newValue.imag
+            }
+        }
+    }
 }
 
 // MARK: - Type Alias for backward compatibility
