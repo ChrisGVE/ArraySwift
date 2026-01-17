@@ -5,6 +5,7 @@
 [![SPM Compatible](https://img.shields.io/badge/SPM-Compatible-brightgreen.svg?style=flat&logo=swift&logoColor=white)](https://swift.org/package-manager/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg?style=flat)](https://opensource.org/licenses/MIT)
 [![GitHub Release](https://img.shields.io/github/v/release/ChrisGVE/ArraySwift?style=flat&logo=github)](https://github.com/ChrisGVE/ArraySwift/releases)
+[![CI](https://github.com/ChrisGVE/ArraySwift/actions/workflows/ci.yml/badge.svg)](https://github.com/ChrisGVE/ArraySwift/actions/workflows/ci.yml)
 [![Documentation](https://img.shields.io/badge/Documentation-DocC-blue.svg?style=flat&logo=readthedocs&logoColor=white)](https://swiftpackageindex.com/ChrisGVE/ArraySwift/documentation)
 
 N-dimensional array library for Swift with NumPy-inspired API and Accelerate optimization.
