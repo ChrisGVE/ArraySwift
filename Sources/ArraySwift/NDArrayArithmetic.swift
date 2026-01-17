@@ -715,4 +715,38 @@ extension NDArray {
     public static func / (lhs: Double, rhs: NDArray) -> NDArray {
         rhs.scalarDivide(lhs)
     }
+
+    // MARK: - Compound Assignment Operators
+
+    public static func += (lhs: inout NDArray, rhs: NDArray) {
+        lhs = lhs.add(rhs)
+    }
+
+    public static func -= (lhs: inout NDArray, rhs: NDArray) {
+        lhs = lhs.subtract(rhs)
+    }
+
+    public static func *= (lhs: inout NDArray, rhs: NDArray) {
+        lhs = lhs.multiply(rhs)
+    }
+
+    public static func /= (lhs: inout NDArray, rhs: NDArray) {
+        lhs = lhs.divide(rhs)
+    }
+
+    public static func += (lhs: inout NDArray, rhs: Double) {
+        lhs = lhs.add(rhs)
+    }
+
+    public static func -= (lhs: inout NDArray, rhs: Double) {
+        lhs = lhs.subtract(rhs)
+    }
+
+    public static func *= (lhs: inout NDArray, rhs: Double) {
+        lhs = lhs.multiply(rhs)
+    }
+
+    public static func /= (lhs: inout NDArray, rhs: Double) {
+        lhs = lhs.divide(rhs)
+    }
 }

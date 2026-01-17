@@ -909,4 +909,51 @@ final class NDArrayTests: XCTestCase {
         let result = NDArray.where(condition, x, y)
         XCTAssertEqual(result.real, [10, 200, 30, 400])
     }
+
+    // MARK: - Compound Assignment Tests
+
+    func testCompoundAssignment() {
+        // Array += Array
+        var a = NDArray([1.0, 2.0, 3.0])
+        let b = NDArray([10.0, 20.0, 30.0])
+        a += b
+        XCTAssertEqual(a.real, [11, 22, 33])
+
+        // Array -= Array
+        a = NDArray([10.0, 20.0, 30.0])
+        a -= b
+        XCTAssertEqual(a.real, [0, 0, 0])
+
+        // Array *= Array
+        a = NDArray([1.0, 2.0, 3.0])
+        a *= b
+        XCTAssertEqual(a.real, [10, 40, 90])
+
+        // Array /= Array
+        a = NDArray([10.0, 40.0, 90.0])
+        a /= b
+        XCTAssertEqual(a.real, [1, 2, 3])
+    }
+
+    func testCompoundAssignmentScalar() {
+        // Array += Scalar
+        var a = NDArray([1.0, 2.0, 3.0])
+        a += 10.0
+        XCTAssertEqual(a.real, [11, 12, 13])
+
+        // Array -= Scalar
+        a = NDArray([10.0, 20.0, 30.0])
+        a -= 5.0
+        XCTAssertEqual(a.real, [5, 15, 25])
+
+        // Array *= Scalar
+        a = NDArray([1.0, 2.0, 3.0])
+        a *= 2.0
+        XCTAssertEqual(a.real, [2, 4, 6])
+
+        // Array /= Scalar
+        a = NDArray([10.0, 20.0, 30.0])
+        a /= 10.0
+        XCTAssertEqual(a.real, [1, 2, 3])
+    }
 }
