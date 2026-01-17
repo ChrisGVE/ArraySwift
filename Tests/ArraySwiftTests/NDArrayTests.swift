@@ -400,6 +400,53 @@ final class NDArrayTests: XCTestCase {
         XCTAssertEqual(b.imag![2], 20) // [1,0] imag
     }
 
+    func testComplexConcatenate() {
+        let a = NDArray.complexArray(shape: [2], real: [1.0, 2.0], imag: [10.0, 20.0])
+        let b = NDArray.complexArray(shape: [2], real: [3.0, 4.0], imag: [30.0, 40.0])
+        let c = NDArray.concatenate([a, b])
+        XCTAssertEqual(c.shape, [4])
+        XCTAssertTrue(c.isComplex)
+        XCTAssertEqual(c.real, [1, 2, 3, 4])
+        XCTAssertEqual(c.imag!, [10, 20, 30, 40])
+    }
+
+    func testComplexSplit() {
+        let a = NDArray.complexArray(shape: [4], real: [1.0, 2.0, 3.0, 4.0], imag: [10.0, 20.0, 30.0, 40.0])
+        let parts = a.split(indices: [2])
+        XCTAssertEqual(parts.count, 2)
+        XCTAssertTrue(parts[0].isComplex)
+        XCTAssertTrue(parts[1].isComplex)
+        XCTAssertEqual(parts[0].real, [1, 2])
+        XCTAssertEqual(parts[0].imag!, [10, 20])
+        XCTAssertEqual(parts[1].real, [3, 4])
+        XCTAssertEqual(parts[1].imag!, [30, 40])
+    }
+
+    func testComplexFlip() {
+        let a = NDArray.complexArray(shape: [3], real: [1.0, 2.0, 3.0], imag: [10.0, 20.0, 30.0])
+        let b = a.flip()
+        XCTAssertTrue(b.isComplex)
+        XCTAssertEqual(b.real, [3, 2, 1])
+        XCTAssertEqual(b.imag!, [30, 20, 10])
+    }
+
+    func testComplexRoll() {
+        let a = NDArray.complexArray(shape: [4], real: [1.0, 2.0, 3.0, 4.0], imag: [10.0, 20.0, 30.0, 40.0])
+        let b = a.roll(1)
+        XCTAssertTrue(b.isComplex)
+        XCTAssertEqual(b.real, [4, 1, 2, 3])
+        XCTAssertEqual(b.imag!, [40, 10, 20, 30])
+    }
+
+    func testComplexRepeat() {
+        let a = NDArray.complexArray(shape: [2], real: [1.0, 2.0], imag: [10.0, 20.0])
+        let b = a.repeat(2)
+        XCTAssertTrue(b.isComplex)
+        XCTAssertEqual(b.shape, [4])
+        XCTAssertEqual(b.real, [1, 1, 2, 2])
+        XCTAssertEqual(b.imag!, [10, 10, 20, 20])
+    }
+
     func testConcatenate() {
         let a = NDArray([1.0, 2.0, 3.0])
         let b = NDArray([4.0, 5.0, 6.0])

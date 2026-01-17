@@ -169,12 +169,16 @@ extension NDArray {
             }
         }
 
+        // Check if any array is complex
+        let hasComplex = arrays.contains { $0.isComplex }
+
         // Calculate result shape
         var resultShape = first.shape
         resultShape[normalizedAxis] = arrays.reduce(0) { $0 + $1.shape[normalizedAxis] }
 
         let resultSize = resultShape.reduce(1, *)
-        var resultData = [Double](repeating: 0, count: resultSize)
+        var resultReal = [Double](repeating: 0, count: resultSize)
+        var resultImag: [Double]? = hasComplex ? [Double](repeating: 0, count: resultSize) : nil
 
         // Calculate strides
         var resultStrides = [Int](repeating: 1, count: first.ndim)
@@ -208,13 +212,19 @@ extension NDArray {
                     resultIdx += indices[d] * resultStrides[d]
                 }
 
-                resultData[resultIdx] = arr.real[i]
+                resultReal[resultIdx] = arr.real[i]
+                if hasComplex {
+                    resultImag![resultIdx] = arr.imag?[i] ?? 0
+                }
             }
 
             axisOffset += arr.shape[normalizedAxis]
         }
 
-        return NDArray(shape: resultShape, data: resultData)
+        if hasComplex {
+            return NDArray(shape: resultShape, dtype: .complex128, real: resultReal, imag: resultImag)
+        }
+        return NDArray(shape: resultShape, data: resultReal)
     }
 
     /// Stack arrays along a new axis.
@@ -244,8 +254,9 @@ extension NDArray {
                 var sliceShape = shape
                 sliceShape[normalizedAxis] = sliceSize
 
-                // Extract slice (simplified for contiguous case)
-                var sliceData = [Double](repeating: 0, count: sliceShape.reduce(1, *))
+                let sliceCount = sliceShape.reduce(1, *)
+                var sliceReal = [Double](repeating: 0, count: sliceCount)
+                var sliceImag: [Double]? = isComplex ? [Double](repeating: 0, count: sliceCount) : nil
 
                 // Calculate strides
                 var strides = [Int](repeating: 1, count: ndim)
@@ -258,7 +269,7 @@ extension NDArray {
                     sliceStrides[i] = sliceStrides[i + 1] * sliceShape[i + 1]
                 }
 
-                for i in 0..<sliceData.count {
+                for i in 0..<sliceCount {
                     var indices = [Int](repeating: 0, count: ndim)
                     var remaining = i
                     for d in 0..<ndim {
@@ -273,10 +284,17 @@ extension NDArray {
                         srcIdx += indices[d] * strides[d]
                     }
 
-                    sliceData[i] = real[srcIdx]
+                    sliceReal[i] = real[srcIdx]
+                    if isComplex, let imagPart = imag {
+                        sliceImag![i] = imagPart[srcIdx]
+                    }
                 }
 
-                results.append(NDArray(shape: sliceShape, data: sliceData))
+                if isComplex {
+                    results.append(NDArray(shape: sliceShape, dtype: .complex128, real: sliceReal, imag: sliceImag))
+                } else {
+                    results.append(NDArray(shape: sliceShape, data: sliceReal))
+                }
             }
             prevIdx = idx
         }
@@ -320,7 +338,9 @@ extension NDArray {
             var newShape = shape
             newShape[normalizedAxis] *= repeats
 
-            var newData = [Double](repeating: 0, count: newShape.reduce(1, *))
+            let newSize = newShape.reduce(1, *)
+            var newReal = [Double](repeating: 0, count: newSize)
+            var newImag: [Double]? = isComplex ? [Double](repeating: 0, count: newSize) : nil
 
             // Calculate strides
             var oldStrides = [Int](repeating: 1, count: ndim)
@@ -350,20 +370,36 @@ extension NDArray {
                         newIdx += newIndices[d] * newStrides[d]
                     }
 
-                    newData[newIdx] = real[i]
+                    newReal[newIdx] = real[i]
+                    if isComplex, let imagPart = imag {
+                        newImag![newIdx] = imagPart[i]
+                    }
                 }
             }
 
-            return NDArray(shape: newShape, data: newData)
+            if isComplex {
+                return NDArray(shape: newShape, dtype: .complex128, real: newReal, imag: newImag)
+            }
+            return NDArray(shape: newShape, data: newReal)
         } else {
             // Repeat all elements (flatten first)
-            var newData = [Double](repeating: 0, count: size * repeats)
+            let newSize = size * repeats
+            var newReal = [Double](repeating: 0, count: newSize)
+            var newImag: [Double]? = isComplex ? [Double](repeating: 0, count: newSize) : nil
+
             for i in 0..<size {
                 for r in 0..<repeats {
-                    newData[i * repeats + r] = real[i]
+                    newReal[i * repeats + r] = real[i]
+                    if isComplex, let imagPart = imag {
+                        newImag![i * repeats + r] = imagPart[i]
+                    }
                 }
             }
-            return NDArray(shape: [size * repeats], data: newData)
+
+            if isComplex {
+                return NDArray(shape: [newSize], dtype: .complex128, real: newReal, imag: newImag)
+            }
+            return NDArray(shape: [newSize], data: newReal)
         }
     }
 
@@ -379,7 +415,8 @@ extension NDArray {
                 strides[i] = strides[i + 1] * shape[i + 1]
             }
 
-            var newData = [Double](repeating: 0, count: size)
+            var newReal = [Double](repeating: 0, count: size)
+            var newImag: [Double]? = isComplex ? [Double](repeating: 0, count: size) : nil
 
             for i in 0..<size {
                 var indices = [Int](repeating: 0, count: ndim)
@@ -397,13 +434,22 @@ extension NDArray {
                     srcIdx += indices[d] * strides[d]
                 }
 
-                newData[i] = real[srcIdx]
+                newReal[i] = real[srcIdx]
+                if isComplex, let imagPart = imag {
+                    newImag![i] = imagPart[srcIdx]
+                }
             }
 
-            return NDArray(shape: shape, data: newData)
+            if isComplex {
+                return NDArray(shape: shape, dtype: .complex128, real: newReal, imag: newImag)
+            }
+            return NDArray(shape: shape, data: newReal)
         } else {
             // Flip all axes
-            return NDArray(shape: shape, data: real.reversed())
+            if isComplex, let imagPart = imag {
+                return NDArray(shape: shape, dtype: .complex128, real: Array(real.reversed()), imag: Array(imagPart.reversed()))
+            }
+            return NDArray(shape: shape, data: Array(real.reversed()))
         }
     }
 
@@ -421,7 +467,8 @@ extension NDArray {
                 strides[i] = strides[i + 1] * shape[i + 1]
             }
 
-            var newData = [Double](repeating: 0, count: size)
+            var newReal = [Double](repeating: 0, count: size)
+            var newImag: [Double]? = isComplex ? [Double](repeating: 0, count: size) : nil
 
             for i in 0..<size {
                 var indices = [Int](repeating: 0, count: ndim)
@@ -439,20 +486,35 @@ extension NDArray {
                     srcIdx += indices[d] * strides[d]
                 }
 
-                newData[i] = real[srcIdx]
+                newReal[i] = real[srcIdx]
+                if isComplex, let imagPart = imag {
+                    newImag![i] = imagPart[srcIdx]
+                }
             }
 
-            return NDArray(shape: shape, data: newData)
+            if isComplex {
+                return NDArray(shape: shape, dtype: .complex128, real: newReal, imag: newImag)
+            }
+            return NDArray(shape: shape, data: newReal)
         } else {
             // Roll flat array
             let normalizedShift = ((shift % size) + size) % size
             if normalizedShift == 0 { return self }
 
-            var newData = [Double](repeating: 0, count: size)
+            var newReal = [Double](repeating: 0, count: size)
+            var newImag: [Double]? = isComplex ? [Double](repeating: 0, count: size) : nil
+
             for i in 0..<size {
-                newData[(i + normalizedShift) % size] = real[i]
+                newReal[(i + normalizedShift) % size] = real[i]
+                if isComplex, let imagPart = imag {
+                    newImag![(i + normalizedShift) % size] = imagPart[i]
+                }
             }
-            return NDArray(shape: shape, data: newData)
+
+            if isComplex {
+                return NDArray(shape: shape, dtype: .complex128, real: newReal, imag: newImag)
+            }
+            return NDArray(shape: shape, data: newReal)
         }
     }
 
