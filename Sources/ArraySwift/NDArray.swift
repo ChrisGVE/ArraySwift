@@ -359,6 +359,118 @@ public struct NDArray: Sendable {
     }
 }
 
+// MARK: - Protocol Conformances
+
+extension NDArray: Equatable {
+    public static func == (lhs: NDArray, rhs: NDArray) -> Bool {
+        guard lhs.shape == rhs.shape else { return false }
+        guard lhs.dtype == rhs.dtype else { return false }
+        guard lhs.real == rhs.real else { return false }
+        if lhs.isComplex || rhs.isComplex {
+            guard lhs.imag == rhs.imag else { return false }
+        }
+        return true
+    }
+}
+
+extension NDArray: CustomStringConvertible {
+    public var description: String {
+        if ndim == 0 {
+            return "NDArray()"
+        } else if ndim == 1 {
+            return formatVector()
+        } else if ndim == 2 {
+            return formatMatrix()
+        } else {
+            return formatNDArray()
+        }
+    }
+
+    private func formatVector() -> String {
+        let maxElements = 10
+        var parts: [String] = []
+
+        if size <= maxElements {
+            for i in 0..<size {
+                parts.append(formatElement(i))
+            }
+        } else {
+            for i in 0..<3 {
+                parts.append(formatElement(i))
+            }
+            parts.append("...")
+            for i in (size - 3)..<size {
+                parts.append(formatElement(i))
+            }
+        }
+
+        let dtype = isComplex ? ", dtype: complex128" : ""
+        return "NDArray([\(parts.joined(separator: ", "))]\(dtype))"
+    }
+
+    private func formatMatrix() -> String {
+        let rows = shape[0]
+        let cols = shape[1]
+        let maxRows = 6
+        let maxCols = 10
+
+        var lines: [String] = ["NDArray(["]
+
+        let rowsToShow = rows <= maxRows ? Array(0..<rows) : Array(0..<3) + [-1] + Array((rows - 3)..<rows)
+        let colsToShow = cols <= maxCols ? Array(0..<cols) : Array(0..<3) + [-1] + Array((cols - 3)..<cols)
+
+        for (idx, row) in rowsToShow.enumerated() {
+            if row == -1 {
+                lines.append("  ...")
+                continue
+            }
+
+            var rowParts: [String] = []
+            for col in colsToShow {
+                if col == -1 {
+                    rowParts.append("...")
+                } else {
+                    rowParts.append(formatElement(row * cols + col))
+                }
+            }
+
+            let prefix = idx == 0 ? " [" : "  ["
+            let suffix = idx == rowsToShow.count - 1 ? "]" : "],"
+            lines.append("\(prefix)\(rowParts.joined(separator: ", "))\(suffix)")
+        }
+
+        let dtype = isComplex ? ", dtype: complex128" : ""
+        lines.append("]\(dtype), shape: \(shape))")
+        return lines.joined(separator: "\n")
+    }
+
+    private func formatNDArray() -> String {
+        let dtype = isComplex ? ", dtype: complex128" : ""
+        return "NDArray(shape: \(shape)\(dtype), size: \(size))"
+    }
+
+    private func formatElement(_ index: Int) -> String {
+        if isComplex, let imagPart = imag {
+            let r = real[index]
+            let i = imagPart[index]
+            if i >= 0 {
+                return String(format: "%.4g+%.4gi", r, i)
+            } else {
+                return String(format: "%.4g%.4gi", r, i)
+            }
+        } else {
+            return String(format: "%.4g", real[index])
+        }
+    }
+}
+
+extension NDArray: CustomDebugStringConvertible {
+    public var debugDescription: String {
+        let dtype = isComplex ? ", dtype: complex128" : ", dtype: float64"
+        return "NDArray(shape: \(shape)\(dtype), size: \(size), strides: \(strides))"
+    }
+}
+
 // MARK: - Type Alias for backward compatibility
 
 /// Backward compatibility alias - ArrayData was the internal name

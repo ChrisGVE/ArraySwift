@@ -956,4 +956,67 @@ final class NDArrayTests: XCTestCase {
         a /= 10.0
         XCTAssertEqual(a.real, [1, 2, 3])
     }
+
+    // MARK: - Protocol Conformance Tests
+
+    func testEquatable() {
+        let a = NDArray([1.0, 2.0, 3.0])
+        let b = NDArray([1.0, 2.0, 3.0])
+        let c = NDArray([1.0, 2.0, 4.0])
+        let d = NDArray([1.0, 2.0])
+
+        XCTAssertEqual(a, b)
+        XCTAssertNotEqual(a, c)
+        XCTAssertNotEqual(a, d)
+
+        // Different shapes but same size
+        let e = NDArray(shape: [3], data: [1, 2, 3])
+        let f = NDArray(shape: [1, 3], data: [1, 2, 3])
+        XCTAssertNotEqual(e, f)
+
+        // Complex arrays
+        let g = NDArray.complexArray(shape: [2], real: [1.0, 2.0], imag: [3.0, 4.0])
+        let h = NDArray.complexArray(shape: [2], real: [1.0, 2.0], imag: [3.0, 4.0])
+        let i = NDArray.complexArray(shape: [2], real: [1.0, 2.0], imag: [3.0, 5.0])
+        XCTAssertEqual(g, h)
+        XCTAssertNotEqual(g, i)
+
+        // Real vs complex with same real values
+        let j = NDArray([1.0, 2.0])
+        XCTAssertNotEqual(g, j)
+    }
+
+    func testCustomStringConvertible() {
+        // 1D array
+        let a = NDArray([1.0, 2.0, 3.0])
+        let descA = a.description
+        XCTAssertTrue(descA.contains("NDArray"))
+        XCTAssertTrue(descA.contains("1"))
+        XCTAssertTrue(descA.contains("2"))
+        XCTAssertTrue(descA.contains("3"))
+
+        // 2D array
+        let b = NDArray([[1.0, 2.0], [3.0, 4.0]])
+        let descB = b.description
+        XCTAssertTrue(descB.contains("NDArray"))
+        XCTAssertTrue(descB.contains("[2, 2]"))
+
+        // Complex array
+        let c = NDArray.complexArray(shape: [2], real: [1.0, 2.0], imag: [3.0, 4.0])
+        let descC = c.description
+        XCTAssertTrue(descC.contains("complex128"))
+
+        // Large 1D array (truncation)
+        let d = NDArray.arange(start: 0, stop: 100)
+        let descD = d.description
+        XCTAssertTrue(descD.contains("..."))
+    }
+
+    func testCustomDebugStringConvertible() {
+        let a = NDArray([[1.0, 2.0], [3.0, 4.0]])
+        let debug = a.debugDescription
+        XCTAssertTrue(debug.contains("shape: [2, 2]"))
+        XCTAssertTrue(debug.contains("size: 4"))
+        XCTAssertTrue(debug.contains("strides:"))
+    }
 }
