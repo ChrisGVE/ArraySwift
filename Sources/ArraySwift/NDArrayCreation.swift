@@ -142,7 +142,9 @@ extension NDArray {
     // MARK: - Identity and Diagonal
 
     /// Create an identity matrix.
-    /// - Parameter n: Size of the matrix (n x n)
+    /// - Parameters:
+    ///   - n: Size of the matrix (n x n)
+    ///   - dtype: Data type of the array (default: float64)
     public static func eye(_ n: Int, dtype: ArrayDType = .float64) -> NDArray {
         var data = [Double](repeating: 0, count: n * n)
         for i in 0..<n {
@@ -158,7 +160,9 @@ extension NDArray {
     }
 
     /// Create a diagonal matrix or extract diagonal from matrix.
-    /// - Parameter values: If 1D, creates diagonal matrix. If 2D, extracts diagonal.
+    /// - Parameters:
+    ///   - values: If 1D, creates diagonal matrix. If 2D, extracts diagonal.
+    ///   - k: Diagonal offset (0 = main diagonal, positive = above, negative = below)
     public static func diag(_ values: NDArray, k: Int = 0) -> NDArray {
         if values.ndim == 1 {
             // Create diagonal matrix from 1D array
