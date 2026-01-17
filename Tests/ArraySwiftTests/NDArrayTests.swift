@@ -630,4 +630,80 @@ final class NDArrayTests: XCTestCase {
         XCTAssertEqual(a.shape, [2, 2, 2])
         XCTAssertEqual(a.size, 8)
     }
+
+    // MARK: - Complex Reduction Tests
+
+    func testComplexReductions() {
+        // Test complex sum
+        let a = NDArray.complexArray(shape: [3], real: [1.0, 2.0, 3.0], imag: [4.0, 5.0, 6.0])
+        let sumResult = a.complexSum()
+        XCTAssertEqual(sumResult.real, 6.0, accuracy: epsilon)
+        XCTAssertEqual(sumResult.imag, 15.0, accuracy: epsilon)
+
+        // Test complex prod: (1+4i)(2+5i)(3+6i)
+        // (1+4i)(2+5i) = 2 + 5i + 8i + 20i² = 2 + 13i - 20 = -18 + 13i
+        // (-18+13i)(3+6i) = -54 - 108i + 39i + 78i² = -54 - 69i - 78 = -132 - 69i
+        let prodResult = a.complexProd()
+        XCTAssertEqual(prodResult.real, -132.0, accuracy: epsilon)
+        XCTAssertEqual(prodResult.imag, -69.0, accuracy: epsilon)
+
+        // Test complex mean
+        let meanResult = a.complexMean()
+        XCTAssertEqual(meanResult.real, 2.0, accuracy: epsilon)
+        XCTAssertEqual(meanResult.imag, 5.0, accuracy: epsilon)
+
+        // Test complex variance: mean of |z - mean|²
+        // Values: (1+4i), (2+5i), (3+6i), mean = (2+5i)
+        // |1+4i - 2-5i|² = |-1-i|² = 1 + 1 = 2
+        // |2+5i - 2-5i|² = |0|² = 0
+        // |3+6i - 2-5i|² = |1+i|² = 1 + 1 = 2
+        // variance = (2 + 0 + 2) / 3 = 4/3
+        let variance = a.variance()
+        XCTAssertEqual(variance, 4.0/3.0, accuracy: epsilon)
+
+        // Test complex cumsum
+        let cumsum = a.cumsum()
+        XCTAssertTrue(cumsum.isComplex)
+        XCTAssertEqual(cumsum.real, [1, 3, 6])
+        XCTAssertEqual(cumsum.imag, [4, 9, 15])
+
+        // Test complex cumprod
+        let cumprod = a.cumprod()
+        XCTAssertTrue(cumprod.isComplex)
+        XCTAssertEqual(cumprod.real[0], 1.0, accuracy: epsilon)  // (1+4i)
+        XCTAssertEqual(cumprod.imag![0], 4.0, accuracy: epsilon)
+        XCTAssertEqual(cumprod.real[1], -18.0, accuracy: epsilon)  // (1+4i)(2+5i)
+        XCTAssertEqual(cumprod.imag![1], 13.0, accuracy: epsilon)
+        XCTAssertEqual(cumprod.real[2], -132.0, accuracy: epsilon)  // final product
+        XCTAssertEqual(cumprod.imag![2], -69.0, accuracy: epsilon)
+
+        // Test complex diff
+        let diff = a.diff()
+        XCTAssertTrue(diff.isComplex)
+        XCTAssertEqual(diff.real, [1, 1])  // 2-1, 3-2
+        XCTAssertEqual(diff.imag, [1, 1])  // 5-4, 6-5
+    }
+
+    func testComplexSumAlongAxis() {
+        // 2x2 complex array
+        let a = NDArray.complexArray(
+            shape: [2, 2],
+            real: [1.0, 2.0, 3.0, 4.0],
+            imag: [5.0, 6.0, 7.0, 8.0]
+        )
+
+        // Sum along axis 0 (columns)
+        let sum0 = a.sum(axis: 0)
+        XCTAssertTrue(sum0.isComplex)
+        XCTAssertEqual(sum0.shape, [2])
+        XCTAssertEqual(sum0.real, [4, 6])  // 1+3, 2+4
+        XCTAssertEqual(sum0.imag, [12, 14])  // 5+7, 6+8
+
+        // Sum along axis 1 (rows)
+        let sum1 = a.sum(axis: 1)
+        XCTAssertTrue(sum1.isComplex)
+        XCTAssertEqual(sum1.shape, [2])
+        XCTAssertEqual(sum1.real, [3, 7])  // 1+2, 3+4
+        XCTAssertEqual(sum1.imag, [11, 15])  // 5+6, 7+8
+    }
 }

@@ -14,23 +14,45 @@ extension NDArray {
 
     // MARK: - Sum and Product
 
-    /// Sum of all elements.
+    /// Sum of all elements (real part only for real arrays).
     public func sum() -> Double {
         var result: Double = 0
         vDSP_sveD(real, 1, &result, vDSP_Length(size))
         return result
     }
 
+    /// Sum of all elements, returning complex for complex arrays.
+    public func complexSum() -> (real: Double, imag: Double) {
+        var realSum: Double = 0
+        vDSP_sveD(real, 1, &realSum, vDSP_Length(size))
+
+        if isComplex, let imagPart = imag {
+            var imagSum: Double = 0
+            vDSP_sveD(imagPart, 1, &imagSum, vDSP_Length(size))
+            return (realSum, imagSum)
+        }
+        return (realSum, 0)
+    }
+
     /// Sum along an axis.
     public func sum(axis: Int) -> NDArray {
-        reduceAlongAxis(axis: axis) { slice in
+        if isComplex {
+            return reduceAlongAxisComplex(axis: axis) { realSlice, imagSlice in
+                var realSum: Double = 0
+                var imagSum: Double = 0
+                vDSP_sveD(realSlice, 1, &realSum, vDSP_Length(realSlice.count))
+                vDSP_sveD(imagSlice, 1, &imagSum, vDSP_Length(imagSlice.count))
+                return (realSum, imagSum)
+            }
+        }
+        return reduceAlongAxis(axis: axis) { slice in
             var result: Double = 0
             vDSP_sveD(slice, 1, &result, vDSP_Length(slice.count))
             return result
         }
     }
 
-    /// Product of all elements.
+    /// Product of all elements (real part only for real arrays).
     public func prod() -> Double {
         guard size > 0 else { return 1 }
         var result = real[0]
@@ -40,9 +62,46 @@ extension NDArray {
         return result
     }
 
+    /// Product of all elements, returning complex for complex arrays.
+    public func complexProd() -> (real: Double, imag: Double) {
+        guard size > 0 else { return (1, 0) }
+
+        if isComplex, let imagPart = imag {
+            var resultReal = real[0]
+            var resultImag = imagPart[0]
+            for i in 1..<size {
+                // (a + bi)(c + di) = (ac - bd) + (ad + bc)i
+                let a = resultReal
+                let b = resultImag
+                let c = real[i]
+                let d = imagPart[i]
+                resultReal = a * c - b * d
+                resultImag = a * d + b * c
+            }
+            return (resultReal, resultImag)
+        }
+        return (prod(), 0)
+    }
+
     /// Product along an axis.
     public func prod(axis: Int) -> NDArray {
-        reduceAlongAxis(axis: axis) { slice in
+        if isComplex {
+            return reduceAlongAxisComplex(axis: axis) { realSlice, imagSlice in
+                guard !realSlice.isEmpty else { return (1, 0) }
+                var resultReal = realSlice[0]
+                var resultImag = imagSlice[0]
+                for i in 1..<realSlice.count {
+                    let a = resultReal
+                    let b = resultImag
+                    let c = realSlice[i]
+                    let d = imagSlice[i]
+                    resultReal = a * c - b * d
+                    resultImag = a * d + b * c
+                }
+                return (resultReal, resultImag)
+            }
+        }
+        return reduceAlongAxis(axis: axis) { slice in
             var result = 1.0
             for val in slice {
                 result *= val
@@ -53,16 +112,32 @@ extension NDArray {
 
     // MARK: - Mean and Variance
 
-    /// Mean of all elements.
+    /// Mean of all elements (real part only for real arrays).
     public func mean() -> Double {
         var result: Double = 0
         vDSP_meanvD(real, 1, &result, vDSP_Length(size))
         return result
     }
 
+    /// Mean of all elements, returning complex for complex arrays.
+    public func complexMean() -> (real: Double, imag: Double) {
+        let s = complexSum()
+        return (s.real / Double(size), s.imag / Double(size))
+    }
+
     /// Mean along an axis.
     public func mean(axis: Int) -> NDArray {
-        reduceAlongAxis(axis: axis) { slice in
+        if isComplex {
+            return reduceAlongAxisComplex(axis: axis) { realSlice, imagSlice in
+                var realSum: Double = 0
+                var imagSum: Double = 0
+                vDSP_sveD(realSlice, 1, &realSum, vDSP_Length(realSlice.count))
+                vDSP_sveD(imagSlice, 1, &imagSum, vDSP_Length(imagSlice.count))
+                let n = Double(realSlice.count)
+                return (realSum / n, imagSum / n)
+            }
+        }
+        return reduceAlongAxis(axis: axis) { slice in
             var result: Double = 0
             vDSP_meanvD(slice, 1, &result, vDSP_Length(slice.count))
             return result
@@ -70,8 +145,20 @@ extension NDArray {
     }
 
     /// Variance of all elements.
+    /// For complex arrays, computes mean of |z - mean|² (returns real).
     /// - Parameter ddof: Delta degrees of freedom (default 0 for population variance)
     public func variance(ddof: Int = 0) -> Double {
+        if isComplex, let imagPart = imag {
+            let meanVal = complexMean()
+            var sumSq: Double = 0
+            for i in 0..<size {
+                let diffReal = real[i] - meanVal.real
+                let diffImag = imagPart[i] - meanVal.imag
+                sumSq += diffReal * diffReal + diffImag * diffImag
+            }
+            return sumSq / Double(size - ddof)
+        }
+
         let m = mean()
         var sumSq: Double = 0
         for i in 0..<size {
@@ -82,8 +169,25 @@ extension NDArray {
     }
 
     /// Variance along an axis.
+    /// For complex arrays, computes mean of |z - mean|² (returns real).
     public func variance(axis: Int, ddof: Int = 0) -> NDArray {
-        reduceAlongAxis(axis: axis) { slice in
+        if isComplex {
+            return reduceAlongAxisComplexToReal(axis: axis) { realSlice, imagSlice in
+                let n = realSlice.count
+                // Compute complex mean
+                let meanReal = realSlice.reduce(0, +) / Double(n)
+                let meanImag = imagSlice.reduce(0, +) / Double(n)
+                // Compute sum of |z - mean|²
+                var sumSq: Double = 0
+                for i in 0..<n {
+                    let diffReal = realSlice[i] - meanReal
+                    let diffImag = imagSlice[i] - meanImag
+                    sumSq += diffReal * diffReal + diffImag * diffImag
+                }
+                return sumSq / Double(n - ddof)
+            }
+        }
+        return reduceAlongAxis(axis: axis) { slice in
             let m = slice.reduce(0, +) / Double(slice.count)
             var sumSq: Double = 0
             for val in slice {
@@ -95,6 +199,7 @@ extension NDArray {
     }
 
     /// Standard deviation of all elements.
+    /// For complex arrays, returns sqrt of variance (real result).
     /// - Parameter ddof: Delta degrees of freedom (default 0 for population std)
     public func std(ddof: Int = 0) -> Double {
         Darwin.sqrt(variance(ddof: ddof))
@@ -165,6 +270,20 @@ extension NDArray {
 
     /// Cumulative sum.
     public func cumsum() -> NDArray {
+        if isComplex, let imagPart = imag {
+            var resultReal = [Double](repeating: 0, count: size)
+            var resultImag = [Double](repeating: 0, count: size)
+            var sumReal: Double = 0
+            var sumImag: Double = 0
+            for i in 0..<size {
+                sumReal += real[i]
+                sumImag += imagPart[i]
+                resultReal[i] = sumReal
+                resultImag[i] = sumImag
+            }
+            return NDArray.complexArray(shape: [size], real: resultReal, imag: resultImag)
+        }
+
         var result = [Double](repeating: 0, count: size)
         var sum: Double = 0
         for i in 0..<size {
@@ -176,6 +295,25 @@ extension NDArray {
 
     /// Cumulative product.
     public func cumprod() -> NDArray {
+        if isComplex, let imagPart = imag {
+            var resultReal = [Double](repeating: 0, count: size)
+            var resultImag = [Double](repeating: 0, count: size)
+            var prodReal: Double = 1
+            var prodImag: Double = 0
+            for i in 0..<size {
+                // (a + bi)(c + di) = (ac - bd) + (ad + bc)i
+                let a = prodReal
+                let b = prodImag
+                let c = real[i]
+                let d = imagPart[i]
+                prodReal = a * c - b * d
+                prodImag = a * d + b * c
+                resultReal[i] = prodReal
+                resultImag[i] = prodImag
+            }
+            return NDArray.complexArray(shape: [size], real: resultReal, imag: resultImag)
+        }
+
         var result = [Double](repeating: 0, count: size)
         var prod: Double = 1
         for i in 0..<size {
@@ -187,7 +325,28 @@ extension NDArray {
 
     /// Differences between consecutive elements.
     public func diff(n: Int = 1) -> NDArray {
-        guard size > n else { return NDArray(shape: [0], data: []) }
+        guard size > n else {
+            if isComplex {
+                return NDArray(shape: [0], dtype: .complex128, real: [], imag: [])
+            }
+            return NDArray(shape: [0], data: [])
+        }
+
+        if isComplex, let imagPart = imag {
+            var currentReal = real
+            var currentImag = imagPart
+            for _ in 0..<n {
+                var newReal = [Double](repeating: 0, count: currentReal.count - 1)
+                var newImag = [Double](repeating: 0, count: currentImag.count - 1)
+                for i in 0..<newReal.count {
+                    newReal[i] = currentReal[i + 1] - currentReal[i]
+                    newImag[i] = currentImag[i + 1] - currentImag[i]
+                }
+                currentReal = newReal
+                currentImag = newImag
+            }
+            return NDArray.complexArray(shape: [currentReal.count], real: currentReal, imag: currentImag)
+        }
 
         var current = real
         for _ in 0..<n {
@@ -271,7 +430,144 @@ extension NDArray {
         percentile(q * 100)
     }
 
-    // MARK: - Axis Reduction Helper
+    // MARK: - Axis Reduction Helpers
+
+    /// Apply a reduction function along an axis for complex arrays.
+    private func reduceAlongAxisComplex(axis: Int, reducer: ([Double], [Double]) -> (Double, Double)) -> NDArray {
+        let normalizedAxis = axis < 0 ? ndim + axis : axis
+        guard normalizedAxis >= 0 && normalizedAxis < ndim else {
+            fatalError("Axis \(axis) out of bounds for array with \(ndim) dimensions")
+        }
+
+        // Calculate result shape (remove the reduced axis)
+        var resultShape = shape
+        resultShape.remove(at: normalizedAxis)
+        if resultShape.isEmpty { resultShape = [1] }
+
+        let resultSize = resultShape.reduce(1, *)
+        var resultReal = [Double](repeating: 0, count: resultSize)
+        var resultImag = [Double](repeating: 0, count: resultSize)
+
+        // Calculate strides
+        var strides = [Int](repeating: 1, count: ndim)
+        for i in stride(from: ndim - 2, through: 0, by: -1) {
+            strides[i] = strides[i + 1] * shape[i + 1]
+        }
+
+        let axisSize = shape[normalizedAxis]
+        let axisStride = strides[normalizedAxis]
+
+        let imagPart = imag ?? [Double](repeating: 0, count: size)
+
+        // Iterate over all positions in the result
+        for resultIdx in 0..<resultSize {
+            // Convert result index to source indices (excluding the reduced axis)
+            var sourceIndices = [Int](repeating: 0, count: ndim)
+            var remaining = resultIdx
+            var resultDim = 0
+            for d in 0..<ndim {
+                if d == normalizedAxis {
+                    sourceIndices[d] = 0  // Will iterate over this
+                } else {
+                    var resultStride = 1
+                    for rd in (resultDim + 1)..<resultShape.count {
+                        resultStride *= resultShape[rd]
+                    }
+                    sourceIndices[d] = remaining / resultStride
+                    remaining = remaining % resultStride
+                    resultDim += 1
+                }
+            }
+
+            // Collect slices along the axis
+            var realSlice = [Double](repeating: 0, count: axisSize)
+            var imagSlice = [Double](repeating: 0, count: axisSize)
+            var baseIdx = 0
+            for d in 0..<ndim {
+                if d != normalizedAxis {
+                    baseIdx += sourceIndices[d] * strides[d]
+                }
+            }
+
+            for i in 0..<axisSize {
+                realSlice[i] = real[baseIdx + i * axisStride]
+                imagSlice[i] = imagPart[baseIdx + i * axisStride]
+            }
+
+            let (r, im) = reducer(realSlice, imagSlice)
+            resultReal[resultIdx] = r
+            resultImag[resultIdx] = im
+        }
+
+        return NDArray(shape: resultShape, dtype: .complex128, real: resultReal, imag: resultImag)
+    }
+
+    /// Apply a reduction function along an axis for complex arrays, returning a real result.
+    private func reduceAlongAxisComplexToReal(axis: Int, reducer: ([Double], [Double]) -> Double) -> NDArray {
+        let normalizedAxis = axis < 0 ? ndim + axis : axis
+        guard normalizedAxis >= 0 && normalizedAxis < ndim else {
+            fatalError("Axis \(axis) out of bounds for array with \(ndim) dimensions")
+        }
+
+        // Calculate result shape (remove the reduced axis)
+        var resultShape = shape
+        resultShape.remove(at: normalizedAxis)
+        if resultShape.isEmpty { resultShape = [1] }
+
+        let resultSize = resultShape.reduce(1, *)
+        var resultData = [Double](repeating: 0, count: resultSize)
+
+        // Calculate strides
+        var strides = [Int](repeating: 1, count: ndim)
+        for i in stride(from: ndim - 2, through: 0, by: -1) {
+            strides[i] = strides[i + 1] * shape[i + 1]
+        }
+
+        let axisSize = shape[normalizedAxis]
+        let axisStride = strides[normalizedAxis]
+
+        let imagPart = imag ?? [Double](repeating: 0, count: size)
+
+        // Iterate over all positions in the result
+        for resultIdx in 0..<resultSize {
+            // Convert result index to source indices (excluding the reduced axis)
+            var sourceIndices = [Int](repeating: 0, count: ndim)
+            var remaining = resultIdx
+            var resultDim = 0
+            for d in 0..<ndim {
+                if d == normalizedAxis {
+                    sourceIndices[d] = 0  // Will iterate over this
+                } else {
+                    var resultStride = 1
+                    for rd in (resultDim + 1)..<resultShape.count {
+                        resultStride *= resultShape[rd]
+                    }
+                    sourceIndices[d] = remaining / resultStride
+                    remaining = remaining % resultStride
+                    resultDim += 1
+                }
+            }
+
+            // Collect slices along the axis
+            var realSlice = [Double](repeating: 0, count: axisSize)
+            var imagSlice = [Double](repeating: 0, count: axisSize)
+            var baseIdx = 0
+            for d in 0..<ndim {
+                if d != normalizedAxis {
+                    baseIdx += sourceIndices[d] * strides[d]
+                }
+            }
+
+            for i in 0..<axisSize {
+                realSlice[i] = real[baseIdx + i * axisStride]
+                imagSlice[i] = imagPart[baseIdx + i * axisStride]
+            }
+
+            resultData[resultIdx] = reducer(realSlice, imagSlice)
+        }
+
+        return NDArray(shape: resultShape, data: resultData)
+    }
 
     /// Apply a reduction function along an axis.
     private func reduceAlongAxis(axis: Int, reducer: ([Double]) -> Double) -> NDArray {
