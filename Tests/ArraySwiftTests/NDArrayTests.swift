@@ -822,4 +822,91 @@ final class NDArrayTests: XCTestCase {
         XCTAssertEqual(col1.real, [2, 4])
         XCTAssertEqual(col1.imag, [6, 8])
     }
+
+    // MARK: - Comparison Tests
+
+    func testComparisonOperations() {
+        let a = NDArray([1.0, 2.0, 3.0, 4.0, 5.0])
+        let b = NDArray([3.0, 2.0, 1.0, 4.0, 6.0])
+
+        // equal
+        let eq = a.equal(b)
+        XCTAssertEqual(eq.real, [0, 1, 0, 1, 0])
+
+        // notEqual
+        let neq = a.notEqual(b)
+        XCTAssertEqual(neq.real, [1, 0, 1, 0, 1])
+
+        // less
+        let lt = a.less(b)
+        XCTAssertEqual(lt.real, [1, 0, 0, 0, 1])
+
+        // lessEqual
+        let le = a.lessEqual(b)
+        XCTAssertEqual(le.real, [1, 1, 0, 1, 1])
+
+        // greater
+        let gt = a.greater(b)
+        XCTAssertEqual(gt.real, [0, 0, 1, 0, 0])
+
+        // greaterEqual
+        let ge = a.greaterEqual(b)
+        XCTAssertEqual(ge.real, [0, 1, 1, 1, 0])
+    }
+
+    func testScalarComparisons() {
+        let a = NDArray([1.0, 2.0, 3.0, 4.0, 5.0])
+
+        XCTAssertEqual(a.equal(3.0).real, [0, 0, 1, 0, 0])
+        XCTAssertEqual(a.notEqual(3.0).real, [1, 1, 0, 1, 1])
+        XCTAssertEqual(a.less(3.0).real, [1, 1, 0, 0, 0])
+        XCTAssertEqual(a.lessEqual(3.0).real, [1, 1, 1, 0, 0])
+        XCTAssertEqual(a.greater(3.0).real, [0, 0, 0, 1, 1])
+        XCTAssertEqual(a.greaterEqual(3.0).real, [0, 0, 1, 1, 1])
+    }
+
+    func testSpecialValueChecks() {
+        let a = NDArray([1.0, Double.nan, Double.infinity, -Double.infinity, 0.0])
+
+        let nan = a.isnan()
+        XCTAssertEqual(nan.real, [0, 1, 0, 0, 0])
+
+        let inf = a.isinf()
+        XCTAssertEqual(inf.real, [0, 0, 1, 1, 0])
+
+        let finite = a.isfinite()
+        XCTAssertEqual(finite.real, [1, 0, 0, 0, 1])
+
+        let posinf = a.isposinf()
+        XCTAssertEqual(posinf.real, [0, 0, 1, 0, 0])
+
+        let neginf = a.isneginf()
+        XCTAssertEqual(neginf.real, [0, 0, 0, 1, 0])
+    }
+
+    func testLogicalOperations() {
+        let a = NDArray([1.0, 0.0, 1.0, 0.0])
+        let b = NDArray([1.0, 1.0, 0.0, 0.0])
+
+        // and: 1&1=1, 0&1=0, 1&0=0, 0&0=0
+        XCTAssertEqual(a.logicalAnd(b).real, [1, 0, 0, 0])
+
+        // or: 1|1=1, 0|1=1, 1|0=1, 0|0=0
+        XCTAssertEqual(a.logicalOr(b).real, [1, 1, 1, 0])
+
+        // xor: 1^1=0, 0^1=1, 1^0=1, 0^0=0
+        XCTAssertEqual(a.logicalXor(b).real, [0, 1, 1, 0])
+
+        // not
+        XCTAssertEqual(a.logicalNot().real, [0, 1, 0, 1])
+    }
+
+    func testWhere() {
+        let condition = NDArray([1.0, 0.0, 1.0, 0.0])
+        let x = NDArray([10.0, 20.0, 30.0, 40.0])
+        let y = NDArray([100.0, 200.0, 300.0, 400.0])
+
+        let result = NDArray.where(condition, x, y)
+        XCTAssertEqual(result.real, [10, 200, 30, 400])
+    }
 }
