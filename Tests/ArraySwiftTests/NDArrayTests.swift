@@ -447,6 +447,28 @@ final class NDArrayTests: XCTestCase {
         XCTAssertEqual(b.imag!, [10, 10, 20, 20])
     }
 
+    func testComplexMathFunctions() {
+        // Test complex square: (3+4i)² = 9-16+24i = -7+24i
+        let a = NDArray.complexArray(shape: [1], real: [3.0], imag: [4.0])
+        let sq = a.square()
+        XCTAssertTrue(sq.isComplex)
+        XCTAssertEqual(sq.real[0], -7, accuracy: epsilon)
+        XCTAssertEqual(sq.imag![0], 24, accuracy: epsilon)
+
+        // Test complex sqrt: sqrt(-1) = i
+        let minusOne = NDArray.complexArray(shape: [1], real: [-1.0], imag: [0.0])
+        let sqrtMinusOne = minusOne.sqrt()
+        XCTAssertTrue(sqrtMinusOne.isComplex)
+        XCTAssertEqual(sqrtMinusOne.real[0], 0, accuracy: epsilon)
+        XCTAssertEqual(sqrtMinusOne.imag![0], 1, accuracy: epsilon)
+
+        // Test complex sign: sign(3+4i) = (3+4i)/5 = 0.6+0.8i
+        let sign = a.sign()
+        XCTAssertTrue(sign.isComplex)
+        XCTAssertEqual(sign.real[0], 0.6, accuracy: epsilon)
+        XCTAssertEqual(sign.imag![0], 0.8, accuracy: epsilon)
+    }
+
     func testConcatenate() {
         let a = NDArray([1.0, 2.0, 3.0])
         let b = NDArray([4.0, 5.0, 6.0])

@@ -38,7 +38,13 @@ extension NDArray {
     }
 
     /// Square root of each element.
+    /// For complex arrays, returns complex square root.
+    /// For real arrays with negative values, returns NaN (use csqrt for complex result).
     public func sqrt() -> NDArray {
+        if isComplex {
+            return csqrt()
+        }
+
         var result = real
         var count = Int32(size)
         vvsqrt(&result, real, &count)
@@ -47,13 +53,44 @@ extension NDArray {
 
     /// Square of each element.
     public func square() -> NDArray {
+        if isComplex, let imagPart = imag {
+            // (a + bi)² = a² - b² + 2abi
+            var resultReal = [Double](repeating: 0, count: size)
+            var resultImag = [Double](repeating: 0, count: size)
+
+            for i in 0..<size {
+                let a = real[i]
+                let b = imagPart[i]
+                resultReal[i] = a * a - b * b
+                resultImag[i] = 2 * a * b
+            }
+
+            return NDArray.complexArray(shape: shape, real: resultReal, imag: resultImag)
+        }
+
         var result = [Double](repeating: 0, count: size)
         vDSP_vsqD(real, 1, &result, 1, vDSP_Length(size))
         return NDArray(shape: shape, data: result)
     }
 
-    /// Sign of each element (-1, 0, or 1).
+    /// Sign of each element (-1, 0, or 1 for real; z/|z| for complex).
     public func sign() -> NDArray {
+        if isComplex, let imagPart = imag {
+            // sign(z) = z / |z| (normalized to unit circle, 0 if z = 0)
+            var resultReal = [Double](repeating: 0, count: size)
+            var resultImag = [Double](repeating: 0, count: size)
+
+            for i in 0..<size {
+                let r = hypot(real[i], imagPart[i])
+                if r > 0 {
+                    resultReal[i] = real[i] / r
+                    resultImag[i] = imagPart[i] / r
+                }
+            }
+
+            return NDArray.complexArray(shape: shape, real: resultReal, imag: resultImag)
+        }
+
         var result = [Double](repeating: 0, count: size)
         for i in 0..<size {
             if real[i] > 0 { result[i] = 1 }
@@ -187,6 +224,13 @@ extension NDArray {
 
     /// Tangent of each element.
     public func tan() -> NDArray {
+        if isComplex {
+            // tan(z) = sin(z) / cos(z)
+            let s = self.sin()
+            let c = self.cos()
+            return s.divide(c)
+        }
+
         var result = real
         var count = Int32(size)
         vvtan(&result, real, &count)
@@ -229,6 +273,19 @@ extension NDArray {
 
     /// Hyperbolic sine of each element.
     public func sinh() -> NDArray {
+        if isComplex, let imagPart = imag {
+            // sinh(a + bi) = sinh(a)cos(b) + i*cosh(a)sin(b)
+            var resultReal = [Double](repeating: 0, count: size)
+            var resultImag = [Double](repeating: 0, count: size)
+
+            for i in 0..<size {
+                resultReal[i] = Darwin.sinh(real[i]) * Darwin.cos(imagPart[i])
+                resultImag[i] = Darwin.cosh(real[i]) * Darwin.sin(imagPart[i])
+            }
+
+            return NDArray.complexArray(shape: shape, real: resultReal, imag: resultImag)
+        }
+
         var result = real
         var count = Int32(size)
         vvsinh(&result, real, &count)
@@ -237,6 +294,19 @@ extension NDArray {
 
     /// Hyperbolic cosine of each element.
     public func cosh() -> NDArray {
+        if isComplex, let imagPart = imag {
+            // cosh(a + bi) = cosh(a)cos(b) + i*sinh(a)sin(b)
+            var resultReal = [Double](repeating: 0, count: size)
+            var resultImag = [Double](repeating: 0, count: size)
+
+            for i in 0..<size {
+                resultReal[i] = Darwin.cosh(real[i]) * Darwin.cos(imagPart[i])
+                resultImag[i] = Darwin.sinh(real[i]) * Darwin.sin(imagPart[i])
+            }
+
+            return NDArray.complexArray(shape: shape, real: resultReal, imag: resultImag)
+        }
+
         var result = real
         var count = Int32(size)
         vvcosh(&result, real, &count)
@@ -245,6 +315,13 @@ extension NDArray {
 
     /// Hyperbolic tangent of each element.
     public func tanh() -> NDArray {
+        if isComplex {
+            // tanh(z) = sinh(z) / cosh(z)
+            let s = self.sinh()
+            let c = self.cosh()
+            return s.divide(c)
+        }
+
         var result = real
         var count = Int32(size)
         vvtanh(&result, real, &count)
@@ -253,6 +330,16 @@ extension NDArray {
 
     /// Inverse hyperbolic sine of each element.
     public func arcsinh() -> NDArray {
+        if isComplex {
+            // arcsinh(z) = log(z + sqrt(z² + 1))
+            let zSquared = self.square()
+            let one = NDArray.full(shape, real: 1, imag: 0)
+            let inner = zSquared.add(one)
+            let sqrtInner = inner.csqrt()
+            let sum = self.add(sqrtInner)
+            return sum.clog()
+        }
+
         var result = real
         var count = Int32(size)
         vvasinh(&result, real, &count)
@@ -261,6 +348,16 @@ extension NDArray {
 
     /// Inverse hyperbolic cosine of each element.
     public func arccosh() -> NDArray {
+        if isComplex {
+            // arccosh(z) = log(z + sqrt(z² - 1))
+            let zSquared = self.square()
+            let one = NDArray.full(shape, real: 1, imag: 0)
+            let inner = zSquared.subtract(one)
+            let sqrtInner = inner.csqrt()
+            let sum = self.add(sqrtInner)
+            return sum.clog()
+        }
+
         var result = real
         var count = Int32(size)
         vvacosh(&result, real, &count)
@@ -269,6 +366,16 @@ extension NDArray {
 
     /// Inverse hyperbolic tangent of each element.
     public func arctanh() -> NDArray {
+        if isComplex {
+            // arctanh(z) = 0.5 * log((1 + z) / (1 - z))
+            let one = NDArray.full(shape, real: 1, imag: 0)
+            let onePlusZ = one.add(self)
+            let oneMinusZ = one.subtract(self)
+            let ratio = onePlusZ.divide(oneMinusZ)
+            let logRatio = ratio.clog()
+            return logRatio.multiply(0.5)
+        }
+
         var result = real
         var count = Int32(size)
         vvatanh(&result, real, &count)
