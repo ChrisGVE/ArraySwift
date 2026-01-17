@@ -165,6 +165,251 @@ extension NDArray {
         }
         return NDArray(shape: resultShape, data: result)
     }
+
+    // MARK: - Dot Product
+
+    /// Compute the dot product of two arrays.
+    /// - For 1-D arrays: inner product of vectors
+    /// - For 2-D arrays: matrix multiplication
+    /// - For N-D arrays: sum product over last axis of a and second-to-last of b
+    public func dot(_ other: NDArray) -> NDArray {
+        // 1D x 1D: inner product (returns scalar as 0-D array)
+        if ndim == 1 && other.ndim == 1 {
+            precondition(size == other.size, "Vectors must have same length for dot product")
+            var result: Double = 0
+            vDSP_dotprD(real, 1, other.real, 1, &result, vDSP_Length(size))
+            return NDArray(shape: [1], data: [result])
+        }
+
+        // 2D x 2D: matrix multiplication
+        if ndim == 2 && other.ndim == 2 {
+            return matmul(other)
+        }
+
+        // 2D x 1D: matrix-vector multiplication
+        if ndim == 2 && other.ndim == 1 {
+            precondition(shape[1] == other.size, "Inner dimensions must match")
+            return matvec(other)
+        }
+
+        // 1D x 2D: vector-matrix multiplication
+        if ndim == 1 && other.ndim == 2 {
+            precondition(size == other.shape[0], "Inner dimensions must match")
+            return vecmat(other)
+        }
+
+        // General N-D case
+        return generalDot(other)
+    }
+
+    /// Matrix multiplication (2D x 2D).
+    public func matmul(_ other: NDArray) -> NDArray {
+        precondition(ndim == 2 && other.ndim == 2, "Both arrays must be 2D for matmul")
+        precondition(shape[1] == other.shape[0], "Inner dimensions must match: \(shape[1]) != \(other.shape[0])")
+
+        let m = shape[0]      // rows of A
+        let k = shape[1]      // cols of A = rows of B
+        let n = other.shape[1] // cols of B
+
+        var result = [Double](repeating: 0, count: m * n)
+
+        // Use vDSP for matrix multiply: C = A * B
+        // vDSP_mmulD computes C = A * B where:
+        // A is m x k, B is k x n, C is m x n
+        vDSP_mmulD(
+            real, 1,
+            other.real, 1,
+            &result, 1,
+            vDSP_Length(m),
+            vDSP_Length(n),
+            vDSP_Length(k)
+        )
+
+        return NDArray(shape: [m, n], data: result)
+    }
+
+    /// Matrix-vector multiplication (2D x 1D).
+    private func matvec(_ vec: NDArray) -> NDArray {
+        let m = shape[0]
+        let n = shape[1]
+
+        var result = [Double](repeating: 0, count: m)
+
+        for i in 0..<m {
+            var dot: Double = 0
+            for j in 0..<n {
+                dot += real[i * n + j] * vec.real[j]
+            }
+            result[i] = dot
+        }
+
+        return NDArray(shape: [m], data: result)
+    }
+
+    /// Vector-matrix multiplication (1D x 2D).
+    private func vecmat(_ mat: NDArray) -> NDArray {
+        let m = mat.shape[0]
+        let n = mat.shape[1]
+
+        var result = [Double](repeating: 0, count: n)
+
+        for j in 0..<n {
+            var dot: Double = 0
+            for i in 0..<m {
+                dot += real[i] * mat.real[i * n + j]
+            }
+            result[j] = dot
+        }
+
+        return NDArray(shape: [n], data: result)
+    }
+
+    /// General N-D dot product: sum over last axis of a and second-to-last of b.
+    private func generalDot(_ other: NDArray) -> NDArray {
+        // Sum over last axis of self and second-to-last axis of other
+        // For now, implement a simplified version for common cases
+        let aLastAxis = ndim - 1
+        let bSecondLastAxis = other.ndim >= 2 ? other.ndim - 2 : 0
+
+        precondition(shape[aLastAxis] == other.shape[bSecondLastAxis],
+                     "Contracting dimensions must match")
+
+        // Build result shape: a.shape[:-1] + b.shape[:-2] + b.shape[-1:]
+        var resultShape: [Int] = []
+        for i in 0..<(ndim - 1) {
+            resultShape.append(shape[i])
+        }
+        if other.ndim >= 2 {
+            for i in 0..<(other.ndim - 2) {
+                resultShape.append(other.shape[i])
+            }
+            resultShape.append(other.shape[other.ndim - 1])
+        }
+        if resultShape.isEmpty { resultShape = [1] }
+
+        let k = shape[aLastAxis]  // contracting dimension
+
+        // Compute the product
+        let aOuterSize = shape.dropLast().reduce(1, *)
+        let bOuterSize = other.ndim >= 2 ?
+            other.shape.dropLast(2).reduce(1, *) * other.shape[other.ndim - 1] :
+            1
+
+        var resultData = [Double](repeating: 0, count: resultShape.reduce(1, *))
+
+        // Simple nested loop implementation
+        let aStride = k
+        let bColStride = other.ndim >= 2 ? other.shape[other.ndim - 1] : 1
+        let bRowStride = other.ndim >= 2 ? k * bColStride : k
+
+        for i in 0..<aOuterSize {
+            for j in 0..<bOuterSize {
+                var sum: Double = 0
+                for m in 0..<k {
+                    let aIdx = i * aStride + m
+                    let bIdx: Int
+                    if other.ndim == 1 {
+                        bIdx = m
+                    } else {
+                        let bOuter = j / bColStride
+                        let bInner = j % bColStride
+                        bIdx = bOuter * bRowStride + m * bColStride + bInner
+                    }
+                    if aIdx < real.count && bIdx < other.real.count {
+                        sum += real[aIdx] * other.real[bIdx]
+                    }
+                }
+                let resultIdx = i * bOuterSize + j
+                if resultIdx < resultData.count {
+                    resultData[resultIdx] = sum
+                }
+            }
+        }
+
+        return NDArray(shape: resultShape, data: resultData)
+    }
+
+    // MARK: - Cross Product
+
+    /// Compute the cross product of two 3D vectors.
+    /// Returns a vector perpendicular to both inputs.
+    public func cross(_ other: NDArray) -> NDArray {
+        precondition(size == 3 && other.size == 3, "Cross product requires 3-element vectors")
+
+        let a = real
+        let b = other.real
+
+        // a × b = [a2*b3 - a3*b2, a3*b1 - a1*b3, a1*b2 - a2*b1]
+        let result = [
+            a[1] * b[2] - a[2] * b[1],
+            a[2] * b[0] - a[0] * b[2],
+            a[0] * b[1] - a[1] * b[0]
+        ]
+
+        return NDArray(shape: [3], data: result)
+    }
+
+    // MARK: - Inner Product
+
+    /// Compute the inner product of two arrays.
+    /// For 1-D arrays, this is the same as dot product.
+    /// For N-D arrays, this sums over the last axes of both arrays.
+    public func inner(_ other: NDArray) -> NDArray {
+        if ndim == 1 && other.ndim == 1 {
+            return dot(other)
+        }
+
+        // Sum over last axis of both arrays
+        precondition(shape[ndim - 1] == other.shape[other.ndim - 1],
+                     "Last dimensions must match for inner product")
+
+        // Build result shape
+        var resultShape: [Int] = []
+        for i in 0..<(ndim - 1) {
+            resultShape.append(shape[i])
+        }
+        for i in 0..<(other.ndim - 1) {
+            resultShape.append(other.shape[i])
+        }
+        if resultShape.isEmpty { resultShape = [1] }
+
+        let k = shape[ndim - 1]  // contracting dimension
+        let aOuterSize = shape.dropLast().reduce(1, *)
+        let bOuterSize = other.shape.dropLast().reduce(1, *)
+
+        var resultData = [Double](repeating: 0, count: resultShape.reduce(1, *))
+
+        for i in 0..<aOuterSize {
+            for j in 0..<bOuterSize {
+                var sum: Double = 0
+                for m in 0..<k {
+                    sum += real[i * k + m] * other.real[j * k + m]
+                }
+                resultData[i * bOuterSize + j] = sum
+            }
+        }
+
+        return NDArray(shape: resultShape, data: resultData)
+    }
+
+    // MARK: - Outer Product
+
+    /// Compute the outer product of two vectors.
+    /// Returns a matrix where result[i,j] = a[i] * b[j].
+    public func outer(_ other: NDArray) -> NDArray {
+        let flat = flatten()
+        let otherFlat = other.flatten()
+
+        var result = [Double](repeating: 0, count: flat.size * otherFlat.size)
+
+        for i in 0..<flat.size {
+            for j in 0..<otherFlat.size {
+                result[i * otherFlat.size + j] = flat.real[i] * otherFlat.real[j]
+            }
+        }
+
+        return NDArray(shape: [flat.size, otherFlat.size], data: result)
+    }
 }
 
 // MARK: - Complex Arithmetic Helpers
@@ -660,6 +905,23 @@ public func logicalXor(_ a: NDArray, _ b: NDArray) -> NDArray { a.logicalXor(b) 
 
 /// Element-wise logical NOT.
 public func logicalNot(_ array: NDArray) -> NDArray { array.logicalNot() }
+
+// MARK: - Free Functions for Linear Algebra
+
+/// Dot product of two arrays.
+public func dot(_ a: NDArray, _ b: NDArray) -> NDArray { a.dot(b) }
+
+/// Matrix multiplication.
+public func matmul(_ a: NDArray, _ b: NDArray) -> NDArray { a.matmul(b) }
+
+/// Cross product of two 3D vectors.
+public func cross(_ a: NDArray, _ b: NDArray) -> NDArray { a.cross(b) }
+
+/// Inner product of two arrays.
+public func inner(_ a: NDArray, _ b: NDArray) -> NDArray { a.inner(b) }
+
+/// Outer product of two arrays.
+public func outer(_ a: NDArray, _ b: NDArray) -> NDArray { a.outer(b) }
 
 // MARK: - Operators
 

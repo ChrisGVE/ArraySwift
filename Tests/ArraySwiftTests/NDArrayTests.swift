@@ -1019,4 +1019,134 @@ final class NDArrayTests: XCTestCase {
         XCTAssertTrue(debug.contains("size: 4"))
         XCTAssertTrue(debug.contains("strides:"))
     }
+
+    // MARK: - Linear Algebra Tests
+
+    func testDotProduct1D() {
+        // 1D . 1D = scalar (inner product)
+        let a = NDArray([1.0, 2.0, 3.0])
+        let b = NDArray([4.0, 5.0, 6.0])
+        let result = a.dot(b)
+        // 1*4 + 2*5 + 3*6 = 4 + 10 + 18 = 32
+        XCTAssertEqual(result.shape, [1])
+        XCTAssertEqual(result.real[0], 32.0, accuracy: 1e-10)
+
+        // Free function
+        let result2 = dot(a, b)
+        XCTAssertEqual(result2.real[0], 32.0, accuracy: 1e-10)
+    }
+
+    func testDotProduct2D() {
+        // 2D . 2D = matrix multiplication
+        let a = NDArray([[1.0, 2.0], [3.0, 4.0]])  // 2x2
+        let b = NDArray([[5.0, 6.0], [7.0, 8.0]])  // 2x2
+        let result = a.dot(b)
+        // [[1*5+2*7, 1*6+2*8], [3*5+4*7, 3*6+4*8]]
+        // [[5+14, 6+16], [15+28, 18+32]]
+        // [[19, 22], [43, 50]]
+        XCTAssertEqual(result.shape, [2, 2])
+        XCTAssertEqual(result.real[0], 19.0, accuracy: 1e-10)
+        XCTAssertEqual(result.real[1], 22.0, accuracy: 1e-10)
+        XCTAssertEqual(result.real[2], 43.0, accuracy: 1e-10)
+        XCTAssertEqual(result.real[3], 50.0, accuracy: 1e-10)
+    }
+
+    func testMatmul() {
+        // Matrix multiplication with different shapes
+        let a = NDArray([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]])  // 2x3
+        let b = NDArray([[1.0, 2.0], [3.0, 4.0], [5.0, 6.0]])  // 3x2
+        let result = a.matmul(b)
+        // [[1*1+2*3+3*5, 1*2+2*4+3*6], [4*1+5*3+6*5, 4*2+5*4+6*6]]
+        // [[1+6+15, 2+8+18], [4+15+30, 8+20+36]]
+        // [[22, 28], [49, 64]]
+        XCTAssertEqual(result.shape, [2, 2])
+        XCTAssertEqual(result.real[0], 22.0, accuracy: 1e-10)
+        XCTAssertEqual(result.real[1], 28.0, accuracy: 1e-10)
+        XCTAssertEqual(result.real[2], 49.0, accuracy: 1e-10)
+        XCTAssertEqual(result.real[3], 64.0, accuracy: 1e-10)
+
+        // Free function
+        let result2 = matmul(a, b)
+        XCTAssertEqual(result2.real, result.real)
+    }
+
+    func testCrossProduct() {
+        // Cross product of 3D vectors
+        let a = NDArray([1.0, 0.0, 0.0])  // x-axis unit vector
+        let b = NDArray([0.0, 1.0, 0.0])  // y-axis unit vector
+        let result = a.cross(b)
+        // x × y = z
+        XCTAssertEqual(result.shape, [3])
+        XCTAssertEqual(result.real[0], 0.0, accuracy: 1e-10)
+        XCTAssertEqual(result.real[1], 0.0, accuracy: 1e-10)
+        XCTAssertEqual(result.real[2], 1.0, accuracy: 1e-10)
+
+        // Another cross product
+        let c = NDArray([1.0, 2.0, 3.0])
+        let d = NDArray([4.0, 5.0, 6.0])
+        let result2 = c.cross(d)
+        // [2*6-3*5, 3*4-1*6, 1*5-2*4] = [12-15, 12-6, 5-8] = [-3, 6, -3]
+        XCTAssertEqual(result2.real[0], -3.0, accuracy: 1e-10)
+        XCTAssertEqual(result2.real[1], 6.0, accuracy: 1e-10)
+        XCTAssertEqual(result2.real[2], -3.0, accuracy: 1e-10)
+
+        // Free function
+        let result3 = cross(c, d)
+        XCTAssertEqual(result3.real, result2.real)
+    }
+
+    func testInnerProduct() {
+        // 1D inner product (same as dot for 1D)
+        let a = NDArray([1.0, 2.0, 3.0])
+        let b = NDArray([4.0, 5.0, 6.0])
+        let result = a.inner(b)
+        XCTAssertEqual(result.shape, [1])
+        XCTAssertEqual(result.real[0], 32.0, accuracy: 1e-10)
+
+        // Free function
+        let result2 = inner(a, b)
+        XCTAssertEqual(result2.real[0], 32.0, accuracy: 1e-10)
+    }
+
+    func testOuterProduct() {
+        // Outer product
+        let a = NDArray([1.0, 2.0, 3.0])
+        let b = NDArray([4.0, 5.0])
+        let result = a.outer(b)
+        // [[1*4, 1*5], [2*4, 2*5], [3*4, 3*5]]
+        // [[4, 5], [8, 10], [12, 15]]
+        XCTAssertEqual(result.shape, [3, 2])
+        XCTAssertEqual(result.real[0], 4.0, accuracy: 1e-10)
+        XCTAssertEqual(result.real[1], 5.0, accuracy: 1e-10)
+        XCTAssertEqual(result.real[2], 8.0, accuracy: 1e-10)
+        XCTAssertEqual(result.real[3], 10.0, accuracy: 1e-10)
+        XCTAssertEqual(result.real[4], 12.0, accuracy: 1e-10)
+        XCTAssertEqual(result.real[5], 15.0, accuracy: 1e-10)
+
+        // Free function
+        let result2 = outer(a, b)
+        XCTAssertEqual(result2.real, result.real)
+    }
+
+    func testDotProduct2D1D() {
+        // 2D . 1D = matrix-vector multiplication
+        let a = NDArray([[1.0, 2.0], [3.0, 4.0]])  // 2x2
+        let b = NDArray([5.0, 6.0])                 // 2
+        let result = a.dot(b)
+        // [1*5+2*6, 3*5+4*6] = [5+12, 15+24] = [17, 39]
+        XCTAssertEqual(result.shape, [2])
+        XCTAssertEqual(result.real[0], 17.0, accuracy: 1e-10)
+        XCTAssertEqual(result.real[1], 39.0, accuracy: 1e-10)
+    }
+
+    func testDotProduct1D2D() {
+        // 1D . 2D = vector-matrix multiplication
+        let a = NDArray([1.0, 2.0])                 // 2
+        let b = NDArray([[3.0, 4.0], [5.0, 6.0]])  // 2x2
+        let result = a.dot(b)
+        // [1*3+2*5, 1*4+2*6] = [3+10, 4+12] = [13, 16]
+        XCTAssertEqual(result.shape, [2])
+        XCTAssertEqual(result.real[0], 13.0, accuracy: 1e-10)
+        XCTAssertEqual(result.real[1], 16.0, accuracy: 1e-10)
+    }
 }
