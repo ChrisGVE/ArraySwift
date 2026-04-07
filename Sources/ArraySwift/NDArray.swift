@@ -225,6 +225,14 @@ public struct NDArray: Sendable {
 
   // MARK: - Element Access
 
+  /// Check if element at flat index is non-zero.
+  /// For complex arrays, returns true if either real or imaginary part is non-zero.
+  public func isNonZero(at index: Int) -> Bool {
+    if real[index] != 0 { return true }
+    if isComplex, let imagPart = imag, imagPart[index] != 0 { return true }
+    return false
+  }
+
   /// Get real element at flat index
   public func getReal(at index: Int) -> Double {
     real[index]

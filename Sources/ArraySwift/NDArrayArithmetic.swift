@@ -636,19 +636,36 @@ extension NDArray {
   public func equal(_ other: NDArray) -> NDArray {
     let (a, b, resultShape) = broadcast(self, other)
     var result = [Double](repeating: 0, count: a.size)
-    for i in 0..<a.size {
-      result[i] = a.real[i] == b.real[i] ? 1.0 : 0.0
+    if a.isComplex || b.isComplex {
+      let aImag = a.imag ?? [Double](repeating: 0, count: a.size)
+      let bImag = b.imag ?? [Double](repeating: 0, count: b.size)
+      for i in 0..<a.size {
+        result[i] = (a.real[i] == b.real[i] && aImag[i] == bImag[i]) ? 1.0 : 0.0
+      }
+    } else {
+      for i in 0..<a.size {
+        result[i] = a.real[i] == b.real[i] ? 1.0 : 0.0
+      }
     }
     return NDArray(shape: resultShape, data: result)
   }
 
   /// Element-wise inequality comparison.
   /// Returns NDArray with 1.0 where not equal, 0.0 where equal.
+  /// For complex arrays, checks both real and imaginary parts.
   public func notEqual(_ other: NDArray) -> NDArray {
     let (a, b, resultShape) = broadcast(self, other)
     var result = [Double](repeating: 0, count: a.size)
-    for i in 0..<a.size {
-      result[i] = a.real[i] != b.real[i] ? 1.0 : 0.0
+    if a.isComplex || b.isComplex {
+      let aImag = a.imag ?? [Double](repeating: 0, count: a.size)
+      let bImag = b.imag ?? [Double](repeating: 0, count: b.size)
+      for i in 0..<a.size {
+        result[i] = (a.real[i] != b.real[i] || aImag[i] != bImag[i]) ? 1.0 : 0.0
+      }
+    } else {
+      for i in 0..<a.size {
+        result[i] = a.real[i] != b.real[i] ? 1.0 : 0.0
+      }
     }
     return NDArray(shape: resultShape, data: result)
   }
@@ -807,45 +824,53 @@ extension NDArray {
 
   /// Element-wise logical AND.
   /// Treats non-zero as true, returns 1.0 for true, 0.0 for false.
+  /// For complex arrays, an element is non-zero if either real or imaginary part is non-zero.
   public func logicalAnd(_ other: NDArray) -> NDArray {
     let (a, b, resultShape) = broadcast(self, other)
     var result = [Double](repeating: 0, count: a.size)
     for i in 0..<a.size {
-      result[i] = (a.real[i] != 0 && b.real[i] != 0) ? 1.0 : 0.0
+      let aTruthy = a.isNonZero(at: i)
+      let bTruthy = b.isNonZero(at: i)
+      result[i] = (aTruthy && bTruthy) ? 1.0 : 0.0
     }
     return NDArray(shape: resultShape, data: result)
   }
 
   /// Element-wise logical OR.
   /// Treats non-zero as true, returns 1.0 for true, 0.0 for false.
+  /// For complex arrays, an element is non-zero if either real or imaginary part is non-zero.
   public func logicalOr(_ other: NDArray) -> NDArray {
     let (a, b, resultShape) = broadcast(self, other)
     var result = [Double](repeating: 0, count: a.size)
     for i in 0..<a.size {
-      result[i] = (a.real[i] != 0 || b.real[i] != 0) ? 1.0 : 0.0
+      let aTruthy = a.isNonZero(at: i)
+      let bTruthy = b.isNonZero(at: i)
+      result[i] = (aTruthy || bTruthy) ? 1.0 : 0.0
     }
     return NDArray(shape: resultShape, data: result)
   }
 
   /// Element-wise logical XOR.
   /// Treats non-zero as true, returns 1.0 for true, 0.0 for false.
+  /// For complex arrays, an element is non-zero if either real or imaginary part is non-zero.
   public func logicalXor(_ other: NDArray) -> NDArray {
     let (a, b, resultShape) = broadcast(self, other)
     var result = [Double](repeating: 0, count: a.size)
     for i in 0..<a.size {
-      let aTrue = a.real[i] != 0
-      let bTrue = b.real[i] != 0
-      result[i] = (aTrue != bTrue) ? 1.0 : 0.0
+      let aTruthy = a.isNonZero(at: i)
+      let bTruthy = b.isNonZero(at: i)
+      result[i] = (aTruthy != bTruthy) ? 1.0 : 0.0
     }
     return NDArray(shape: resultShape, data: result)
   }
 
   /// Element-wise logical NOT.
   /// Treats non-zero as true, returns 1.0 where false, 0.0 where true.
+  /// For complex arrays, an element is non-zero if either real or imaginary part is non-zero.
   public func logicalNot() -> NDArray {
     var result = [Double](repeating: 0, count: size)
     for i in 0..<size {
-      result[i] = real[i] == 0 ? 1.0 : 0.0
+      result[i] = isNonZero(at: i) ? 0.0 : 1.0
     }
     return NDArray(shape: shape, data: result)
   }
@@ -854,16 +879,31 @@ extension NDArray {
 
   /// Select elements from one of two arrays based on condition.
   /// Where condition is non-zero, return x, else return y.
+  /// For complex conditions, an element is non-zero if either part is non-zero.
+  /// Preserves complex dtype if either x or y is complex.
   public static func `where`(_ condition: NDArray, _ x: NDArray, _ y: NDArray) -> NDArray {
     let (cond, xArr, _) = broadcast(condition, x)
     let (condFinal, yArr, resultShape) = broadcast(cond, y)
     let (xFinal, _, _) = broadcast(xArr, yArr)
 
-    var result = [Double](repeating: 0, count: condFinal.size)
+    let outputComplex = xFinal.isComplex || yArr.isComplex
+    var resultReal = [Double](repeating: 0, count: condFinal.size)
+    var resultImag: [Double]? = outputComplex ? [Double](repeating: 0, count: condFinal.size) : nil
+
     for i in 0..<condFinal.size {
-      result[i] = condFinal.real[i] != 0 ? xFinal.real[i] : yArr.real[i]
+      let truthy = condFinal.isNonZero(at: i)
+      resultReal[i] = truthy ? xFinal.real[i] : yArr.real[i]
+      if outputComplex {
+        let xImag = xFinal.imag?[i] ?? 0
+        let yImag = yArr.imag?[i] ?? 0
+        resultImag![i] = truthy ? xImag : yImag
+      }
     }
-    return NDArray(shape: resultShape, data: result)
+
+    if outputComplex {
+      return NDArray(shape: resultShape, dtype: .complex128, real: resultReal, imag: resultImag)
+    }
+    return NDArray(shape: resultShape, data: resultReal)
   }
 }
 
