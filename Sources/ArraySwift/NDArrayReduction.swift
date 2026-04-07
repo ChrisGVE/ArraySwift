@@ -14,14 +14,23 @@ extension NDArray {
 
   // MARK: - Sum and Product
 
-  /// Sum of all elements (real part only for real arrays).
+  /// Sum all elements and return the result as a `Double`.
+  ///
+  /// For complex arrays only the real part is summed. Use ``complexSum()`` to include
+  /// the imaginary part. Equivalent to NumPy's `numpy.sum`.
+  ///
+  /// - Returns: The scalar sum of all real elements.
   public func sum() -> Double {
     var result: Double = 0
     vDSP_sveD(real, 1, &result, vDSP_Length(size))
     return result
   }
 
-  /// Sum of all elements, returning complex for complex arrays.
+  /// Sum all elements, returning a `(real:, imag:)` tuple that includes the imaginary part.
+  ///
+  /// For real arrays the imaginary component is always `0`.
+  ///
+  /// - Returns: A tuple `(real:, imag:)` of summed components.
   public func complexSum() -> (real: Double, imag: Double) {
     var realSum: Double = 0
     vDSP_sveD(real, 1, &realSum, vDSP_Length(size))
@@ -34,7 +43,12 @@ extension NDArray {
     return (realSum, 0)
   }
 
-  /// Sum along an axis.
+  /// Sum elements along `axis`, collapsing that dimension. Equivalent to NumPy's `numpy.sum(axis:)`.
+  ///
+  /// Supports complex arrays and negative axis indexing.
+  ///
+  /// - Parameter axis: Axis to reduce. The result has one fewer dimension.
+  /// - Returns: An `NDArray` with the specified axis reduced.
   public func sum(axis: Int) -> NDArray {
     if isComplex {
       return reduceAlongAxisComplex(axis: axis) { base, axisStride, count in
@@ -55,7 +69,12 @@ extension NDArray {
     }
   }
 
-  /// Product of all elements (real part only for real arrays).
+  /// Multiply all elements and return the result as a `Double`.
+  ///
+  /// For complex arrays only the real part is multiplied. Use ``complexProd()`` to include
+  /// the imaginary part. Equivalent to NumPy's `numpy.prod`. Returns `1` for empty arrays.
+  ///
+  /// - Returns: The scalar product of all real elements.
   public func prod() -> Double {
     guard size > 0 else { return 1 }
     var result = real[0]
@@ -65,7 +84,11 @@ extension NDArray {
     return result
   }
 
-  /// Product of all elements, returning complex for complex arrays.
+  /// Multiply all elements using full complex arithmetic.
+  ///
+  /// Returns `(1, 0)` for empty arrays. For real arrays the imaginary component is `0`.
+  ///
+  /// - Returns: A tuple `(real:, imag:)` of the complex product.
   public func complexProd() -> (real: Double, imag: Double) {
     guard size > 0 else { return (1, 0) }
 
@@ -86,7 +109,10 @@ extension NDArray {
     return (prod(), 0)
   }
 
-  /// Product along an axis.
+  /// Multiply elements along `axis`, collapsing that dimension.
+  /// Equivalent to NumPy's `numpy.prod(axis:)`. Supports complex arrays and negative indexing.
+  /// - Parameter axis: Axis to reduce.
+  /// - Returns: An `NDArray` with the specified axis reduced.
   public func prod(axis: Int) -> NDArray {
     if isComplex {
       return reduceAlongAxisComplex(axis: axis) { base, axisStride, count in
@@ -115,20 +141,32 @@ extension NDArray {
 
   // MARK: - Mean and Variance
 
-  /// Mean of all elements (real part only for real arrays).
+  /// Arithmetic mean of all elements. Equivalent to NumPy's `numpy.mean`.
+  ///
+  /// For complex arrays only the real part is averaged. Use ``complexMean()`` to include
+  /// the imaginary part.
+  ///
+  /// - Returns: The scalar mean of all real elements.
   public func mean() -> Double {
     var result: Double = 0
     vDSP_meanvD(real, 1, &result, vDSP_Length(size))
     return result
   }
 
-  /// Mean of all elements, returning complex for complex arrays.
+  /// Arithmetic mean of all elements, returning a `(real:, imag:)` tuple.
+  ///
+  /// For real arrays the imaginary component is `0`.
+  ///
+  /// - Returns: A tuple `(real:, imag:)` of mean components.
   public func complexMean() -> (real: Double, imag: Double) {
     let s = complexSum()
     return (s.real / Double(size), s.imag / Double(size))
   }
 
-  /// Mean along an axis.
+  /// Arithmetic mean along `axis`, collapsing that dimension.
+  /// Equivalent to NumPy's `numpy.mean(axis:)`. Supports complex arrays and negative indexing.
+  /// - Parameter axis: Axis to reduce.
+  /// - Returns: An `NDArray` with the specified axis reduced.
   public func mean(axis: Int) -> NDArray {
     if isComplex {
       return reduceAlongAxisComplex(axis: axis) { base, axisStride, count in
@@ -320,6 +358,57 @@ extension NDArray {
     max() - min()
   }
 
+  /// Peak-to-peak (max - min) along an axis.
+  ///
+  /// For real arrays, computes `max - min` of each slice along `axis`.
+  /// For complex arrays, ordering is determined by magnitude (`|z|`), matching NumPy
+  /// behaviour: the element with the greatest magnitude minus the element with the
+  /// smallest magnitude is returned as a complex value.
+  ///
+  /// - Parameter axis: Axis along which to compute the range (supports negative indexing).
+  /// - Returns: Array with `axis` dimension removed, containing the peak-to-peak values.
+  public func ptp(axis: Int) -> NDArray {
+    let ax = normalizeAxis(axis)
+    if isComplex {
+      return reduceAlongAxisComplex(axis: ax) { base, axisStride, count in
+        let imagPart = imag!
+        var maxMag = -Double.infinity
+        var minMag = Double.infinity
+        var maxReal = 0.0
+        var maxImag = 0.0
+        var minReal = 0.0
+        var minImag = 0.0
+        for i in 0..<count {
+          let idx = base + i * axisStride
+          let r = real[idx]
+          let im = imagPart[idx]
+          let mag = r * r + im * im
+          if mag > maxMag {
+            maxMag = mag
+            maxReal = r
+            maxImag = im
+          }
+          if mag < minMag {
+            minMag = mag
+            minReal = r
+            minImag = im
+          }
+        }
+        return (maxReal - minReal, maxImag - minImag)
+      }
+    }
+    return reduceAlongAxis(axis: ax) { base, axisStride, count in
+      var maxVal = real[base]
+      var minVal = real[base]
+      for i in 1..<count {
+        let v = real[base + i * axisStride]
+        if v > maxVal { maxVal = v }
+        if v < minVal { minVal = v }
+      }
+      return maxVal - minVal
+    }
+  }
+
   // MARK: - Cumulative Operations
 
   /// Cumulative sum.
@@ -377,7 +466,6 @@ extension NDArray {
     return NDArray(shape: [size], data: result)
   }
 
-
   /// Cumulative sum along an axis, preserving the input shape.
   ///
   /// Each element along `axis` is replaced by the running sum up to that position.
@@ -430,8 +518,10 @@ extension NDArray {
         let prev = i - axisStride
         if isComplex, resultImag != nil {
           // (a + bi)(c + di) = (ac - bd) + (ad + bc)i
-          let a = resultReal[prev], b = resultImag![prev]
-          let c = resultReal[i], d = resultImag![i]
+          let a = resultReal[prev]
+          let b = resultImag![prev]
+          let c = resultReal[i]
+          let d = resultImag![i]
           resultReal[i] = a * c - b * d
           resultImag![i] = a * d + b * c
         } else {
@@ -497,7 +587,8 @@ extension NDArray {
           rem %= newStrides[d]
         }
         // Map to two consecutive source flat indices along ax.
-        var srcIdx0 = 0, srcIdx1 = 0
+        var srcIdx0 = 0
+        var srcIdx1 = 0
         for d in 0..<currentShape.count {
           srcIdx0 += coords[d] * curStrides[d]
           srcIdx1 += (d == ax ? coords[d] + 1 : coords[d]) * curStrides[d]
@@ -865,6 +956,9 @@ public func argmin(_ array: NDArray) -> Int { array.argmin() }
 /// Index of maximum.
 public func argmax(_ array: NDArray) -> Int { array.argmax() }
 
+/// Peak-to-peak (max - min) along an axis.
+public func ptp(_ array: NDArray, axis: Int) -> NDArray { array.ptp(axis: axis) }
+
 /// Cumulative sum.
 public func cumsum(_ array: NDArray) -> NDArray { array.cumsum() }
 
@@ -881,7 +975,9 @@ public func cumprod(_ array: NDArray, axis: Int) -> NDArray { array.cumprod(axis
 public func diff(_ array: NDArray, n: Int = 1) -> NDArray { array.diff(n: n) }
 
 /// Differences along an axis.
-public func diff(_ array: NDArray, n: Int = 1, axis: Int) -> NDArray { array.diff(n: n, axis: axis) }
+public func diff(_ array: NDArray, n: Int = 1, axis: Int) -> NDArray {
+  array.diff(n: n, axis: axis)
+}
 
 /// True if all elements are non-zero.
 public func all(_ array: NDArray) -> Bool { array.all() }

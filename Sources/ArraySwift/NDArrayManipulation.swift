@@ -30,7 +30,8 @@ extension NDArray {
         .filter({ $0.offset != idx })
         .map({ $0.element })
         .reduce(1, *)
-      precondition(knownProduct > 0 && size % knownProduct == 0,
+      precondition(
+        knownProduct > 0 && size % knownProduct == 0,
         "Cannot infer dimension: size \(size) is not divisible by \(knownProduct)")
       resolvedShape[idx] = size / knownProduct
     }
@@ -44,7 +45,8 @@ extension NDArray {
     return NDArray(shape: resolvedShape, data: real)
   }
 
-  /// Flatten the array to 1D.
+  /// Return a 1-D copy of the array. Equivalent to NumPy's `ndarray.flatten`.
+  /// - Returns: A 1-D `NDArray` with elements in row-major (C) order.
   public func flatten() -> NDArray {
     if isComplex {
       return NDArray(shape: [size], dtype: .complex128, real: real, imag: imag)
@@ -52,12 +54,19 @@ extension NDArray {
     return NDArray(shape: [size], data: real)
   }
 
-  /// Flatten the array to 1D (alias for flatten).
+  /// Return a 1-D view (or copy) of the array. Alias for ``flatten()``.
+  /// Equivalent to NumPy's `numpy.ravel`.
+  /// - Returns: A 1-D `NDArray` with elements in row-major order.
   public func ravel() -> NDArray {
     flatten()
   }
 
-  /// Remove single-dimensional entries from the shape.
+  /// Remove all length-1 dimensions from the shape.
+  ///
+  /// Equivalent to NumPy's `numpy.squeeze`. If all dimensions are 1, a shape of `[1]`
+  /// is returned rather than a scalar.
+  ///
+  /// - Returns: An `NDArray` with the same data but no size-1 axes.
   public func squeeze() -> NDArray {
     let newShape = shape.filter { $0 != 1 }
     if newShape.isEmpty {
@@ -66,7 +75,14 @@ extension NDArray {
     return reshape(newShape)
   }
 
-  /// Remove a specific axis if it has size 1.
+  /// Remove a specific axis if its length is 1.
+  ///
+  /// If the axis length is not 1, the array is returned unchanged.
+  /// Supports negative axis indexing.
+  ///
+  /// - Parameter axis: Axis to remove. Must refer to a dimension of size 1.
+  /// - Returns: An `NDArray` with the specified axis removed (or `self` if the axis
+  ///   length is not 1).
   public func squeeze(axis: Int) -> NDArray {
     let normalizedAxis = axis < 0 ? ndim + axis : axis
     guard normalizedAxis >= 0 && normalizedAxis < ndim else { return self }
@@ -78,7 +94,13 @@ extension NDArray {
     return reshape(newShape)
   }
 
-  /// Add a new axis at the specified position.
+  /// Insert a new length-1 axis at the specified position.
+  ///
+  /// Equivalent to NumPy's `numpy.expand_dims`. Supports negative axis indexing
+  /// (e.g. `-1` appends a trailing axis).
+  ///
+  /// - Parameter axis: Position at which to insert the new axis.
+  /// - Returns: An `NDArray` with one additional dimension of size 1.
   public func expandDims(axis: Int) -> NDArray {
     var normalizedAxis = axis < 0 ? ndim + axis + 1 : axis
     normalizedAxis = Swift.max(0, Swift.min(normalizedAxis, ndim))
@@ -90,13 +112,22 @@ extension NDArray {
 
   // MARK: - Transpose
 
-  /// Transpose the array (reverse axes).
+  /// Return the array with all axes reversed. Equivalent to NumPy's `ndarray.transpose()`.
+  ///
+  /// For a 2-D array this is the standard matrix transpose. Preserves complex dtype.
+  ///
+  /// - Returns: A new `NDArray` with reversed axis order.
   public func transpose() -> NDArray {
     let axes = Array((0..<ndim).reversed())
     return transpose(axes: axes)
   }
 
-  /// Transpose with specified axis order.
+  /// Return the array transposed according to an explicit axis permutation.
+  ///
+  /// Equivalent to NumPy's `numpy.transpose(a, axes)`. Preserves complex dtype.
+  ///
+  /// - Parameter axes: A permutation of `0..<ndim` specifying the new axis order.
+  /// - Returns: A new `NDArray` with axes permuted as specified.
   public func transpose(axes: [Int]) -> NDArray {
     precondition(axes.count == ndim, "Axes must have same length as dimensions")
     precondition(Set(axes) == Set(0..<ndim), "Axes must be a permutation of 0..<ndim")
@@ -150,7 +181,11 @@ extension NDArray {
   /// Transpose shorthand (equivalent to `transpose()`).
   public var T: NDArray { transpose() }
 
-  /// Swap two axes.
+  /// Interchange two axes. Equivalent to NumPy's `numpy.swapaxes`.
+  /// - Parameters:
+  ///   - axis1: First axis index (supports negative indexing).
+  ///   - axis2: Second axis index (supports negative indexing).
+  /// - Returns: A new `NDArray` with the two axes swapped.
   public func swapaxes(_ axis1: Int, _ axis2: Int) -> NDArray {
     var axes = Array(0..<ndim)
     axes[axis1] = axis2
@@ -158,7 +193,14 @@ extension NDArray {
     return transpose(axes: axes)
   }
 
-  /// Move an axis to a new position.
+  /// Move an axis from `source` to `destination`, shifting other axes accordingly.
+  ///
+  /// Equivalent to NumPy's `numpy.moveaxis`. Supports negative axis indexing.
+  ///
+  /// - Parameters:
+  ///   - source: Original axis position.
+  ///   - destination: Target axis position.
+  /// - Returns: A new `NDArray` with the axis moved.
   public func moveaxis(source: Int, destination: Int) -> NDArray {
     var axes = Array(0..<ndim)
     let src = source < 0 ? ndim + source : source
@@ -171,7 +213,16 @@ extension NDArray {
 
   // MARK: - Concatenation and Stacking
 
-  /// Concatenate arrays along an axis.
+  /// Join a sequence of arrays along an existing axis.
+  ///
+  /// Equivalent to NumPy's `numpy.concatenate`. All arrays must have the same number
+  /// of dimensions and identical shapes except along `axis`. If any input is complex,
+  /// the output is `.complex128`.
+  ///
+  /// - Parameters:
+  ///   - arrays: Arrays to concatenate. Must be non-empty.
+  ///   - axis: Axis along which to concatenate (default `0`). Supports negative indexing.
+  /// - Returns: A new `NDArray` whose `axis` dimension is the sum of the input dimensions.
   public static func concatenate(_ arrays: [NDArray], axis: Int = 0) -> NDArray {
     guard !arrays.isEmpty else { return NDArray(shape: [0], data: []) }
     guard arrays.count > 1 else { return arrays[0] }
@@ -249,7 +300,14 @@ extension NDArray {
     return NDArray(shape: resultShape, data: resultReal)
   }
 
-  /// Stack arrays along a new axis.
+  /// Join a sequence of arrays along a **new** axis.
+  ///
+  /// Equivalent to NumPy's `numpy.stack`. All arrays must have identical shapes.
+  ///
+  /// - Parameters:
+  ///   - arrays: Arrays to stack. Must be non-empty and all share the same shape.
+  ///   - axis: Position of the new axis in the result (default `0`).
+  /// - Returns: A new `NDArray` with one additional dimension of size `arrays.count`.
   public static func stack(_ arrays: [NDArray], axis: Int = 0) -> NDArray {
     guard !arrays.isEmpty else { return NDArray(shape: [0], data: []) }
 
@@ -264,7 +322,15 @@ extension NDArray {
     return concatenate(expanded, axis: axis)
   }
 
-  /// Split array into multiple sub-arrays.
+  /// Split the array into multiple sub-arrays at the given indices along an axis.
+  ///
+  /// Equivalent to NumPy's `numpy.split`. `indices` marks the starting positions of
+  /// each slice; the final slice extends to the end of the axis.
+  ///
+  /// - Parameters:
+  ///   - indices: Sorted list of split points along `axis`.
+  ///   - axis: Axis along which to split (default `0`). Supports negative indexing.
+  /// - Returns: Array of sub-arrays partitioned at the given indices.
   public func split(indices: [Int], axis: Int = 0) -> [NDArray] {
     let normalizedAxis = axis < 0 ? ndim + axis : axis
     var results: [NDArray] = []
@@ -327,7 +393,14 @@ extension NDArray {
 
   // MARK: - Tiling and Repeating
 
-  /// Tile array by repeating it.
+  /// Construct an array by repeating `self` the number of times given by `reps`.
+  ///
+  /// Equivalent to NumPy's `numpy.tile`. When `reps` is shorter than `ndim`, it is
+  /// left-padded with ones. When it is longer, the array is expanded with leading
+  /// size-1 dimensions first.
+  ///
+  /// - Parameter reps: Number of times to repeat along each axis.
+  /// - Returns: A new tiled `NDArray`.
   public func tile(_ reps: [Int]) -> NDArray {
     var result = self
 
@@ -354,7 +427,18 @@ extension NDArray {
     return result
   }
 
-  /// Repeat elements of array.
+  /// Repeat each element a fixed number of times.
+  ///
+  /// Equivalent to NumPy's `numpy.repeat`.
+  ///
+  /// - When `axis` is `nil`: flattens the array first, then repeats every element.
+  /// - When `axis` is given: repeats along that axis without flattening.
+  ///
+  /// - Parameters:
+  ///   - repeats: Number of times to repeat each element.
+  ///   - axis: Axis along which to repeat. Pass `nil` (default) to repeat on a
+  ///     flattened view.
+  /// - Returns: A new `NDArray` with repeated elements.
   public func `repeat`(_ repeats: Int, axis: Int? = nil) -> NDArray {
     if let ax = axis {
       let normalizedAxis = ax < 0 ? ndim + ax : ax
@@ -428,7 +512,12 @@ extension NDArray {
 
   // MARK: - Flip and Roll
 
-  /// Reverse order of elements along an axis.
+  /// Reverse the order of elements along one or all axes.
+  ///
+  /// Equivalent to NumPy's `numpy.flip`.
+  ///
+  /// - Parameter axis: Axis to reverse. Pass `nil` (default) to reverse all elements.
+  /// - Returns: A new `NDArray` with elements in reversed order.
   public func flip(axis: Int? = nil) -> NDArray {
     if let ax = axis {
       let normalizedAxis = ax < 0 ? ndim + ax : ax
@@ -478,7 +567,14 @@ extension NDArray {
     }
   }
 
-  /// Roll elements along an axis.
+  /// Cyclically shift elements by `shift` positions.
+  ///
+  /// Equivalent to NumPy's `numpy.roll`.
+  ///
+  /// - Parameters:
+  ///   - shift: Number of positions to shift. Positive values shift toward higher indices.
+  ///   - axis: Axis along which to shift. Pass `nil` (default) to roll the flattened array.
+  /// - Returns: A new `NDArray` with elements cyclically shifted.
   public func roll(_ shift: Int, axis: Int? = nil) -> NDArray {
     if let ax = axis {
       let normalizedAxis = ax < 0 ? ndim + ax : ax
@@ -545,7 +641,12 @@ extension NDArray {
 
   // MARK: - Copy
 
-  /// Create a copy of the array.
+  /// Return an independent deep copy of the array.
+  ///
+  /// Equivalent to NumPy's `ndarray.copy`. Modifications to the copy do not
+  /// affect the original.
+  ///
+  /// - Returns: A new `NDArray` with the same shape, dtype, and element values.
   public func copy() -> NDArray {
     if isComplex {
       return NDArray(
@@ -557,41 +658,78 @@ extension NDArray {
 
 // MARK: - Free Functions (NumPy-style API)
 
-/// Reshape array.
+/// Reshape `array` to a new shape. Equivalent to NumPy's `numpy.reshape`.
+/// - Parameters:
+///   - array: Source array.
+///   - shape: Target shape. One dimension may be `-1` for automatic inference.
+/// - Returns: A new `NDArray` with the given shape.
 public func reshape(_ array: NDArray, _ shape: [Int]) -> NDArray { array.reshape(shape) }
 
-/// Flatten array.
+/// Return a 1-D copy of `array`. Equivalent to NumPy's `numpy.ndarray.flatten`.
+/// - Parameter array: Source array.
+/// - Returns: A 1-D `NDArray`.
 public func flatten(_ array: NDArray) -> NDArray { array.flatten() }
 
-/// Ravel array.
+/// Return a 1-D view or copy of `array`. Equivalent to NumPy's `numpy.ravel`.
+/// - Parameter array: Source array.
+/// - Returns: A 1-D `NDArray`.
 public func ravel(_ array: NDArray) -> NDArray { array.ravel() }
 
-/// Squeeze array.
+/// Remove length-1 dimensions from `array`. Equivalent to NumPy's `numpy.squeeze`.
+/// - Parameter array: Source array.
+/// - Returns: An `NDArray` with size-1 axes removed.
 public func squeeze(_ array: NDArray) -> NDArray { array.squeeze() }
 
-/// Expand dimensions.
+/// Insert a new axis at `axis`. Equivalent to NumPy's `numpy.expand_dims`.
+/// - Parameters:
+///   - array: Source array.
+///   - axis: Position for the new axis.
+/// - Returns: An `NDArray` with one additional size-1 dimension.
 public func expandDims(_ array: NDArray, axis: Int) -> NDArray { array.expandDims(axis: axis) }
 
-/// Transpose array.
+/// Return `array` with all axes reversed. Equivalent to NumPy's `numpy.transpose`.
+/// - Parameter array: Source array.
+/// - Returns: A transposed `NDArray`.
 public func transpose(_ array: NDArray) -> NDArray { array.transpose() }
 
-/// Concatenate arrays.
+/// Join arrays along an existing axis. Equivalent to NumPy's `numpy.concatenate`.
+/// - Parameters:
+///   - arrays: Arrays to join.
+///   - axis: Axis along which to concatenate (default `0`).
+/// - Returns: A concatenated `NDArray`.
 public func concatenate(_ arrays: [NDArray], axis: Int = 0) -> NDArray {
   NDArray.concatenate(arrays, axis: axis)
 }
 
-/// Stack arrays.
+/// Join arrays along a new axis. Equivalent to NumPy's `numpy.stack`.
+/// - Parameters:
+///   - arrays: Arrays to stack (must share the same shape).
+///   - axis: Position of the new axis (default `0`).
+/// - Returns: A stacked `NDArray`.
 public func stack(_ arrays: [NDArray], axis: Int = 0) -> NDArray {
   NDArray.stack(arrays, axis: axis)
 }
 
-/// Tile array.
+/// Construct an array by tiling `array`. Equivalent to NumPy's `numpy.tile`.
+/// - Parameters:
+///   - array: Source array.
+///   - reps: Repetitions along each axis.
+/// - Returns: A tiled `NDArray`.
 public func tile(_ array: NDArray, _ reps: [Int]) -> NDArray { array.tile(reps) }
 
-/// Flip array.
+/// Reverse elements along an axis. Equivalent to NumPy's `numpy.flip`.
+/// - Parameters:
+///   - array: Source array.
+///   - axis: Axis to flip, or `nil` to flip all elements.
+/// - Returns: A flipped `NDArray`.
 public func flip(_ array: NDArray, axis: Int? = nil) -> NDArray { array.flip(axis: axis) }
 
-/// Roll array.
+/// Cyclically shift elements. Equivalent to NumPy's `numpy.roll`.
+/// - Parameters:
+///   - array: Source array.
+///   - shift: Number of positions to shift.
+///   - axis: Axis to roll along, or `nil` to roll the flattened array.
+/// - Returns: A rolled `NDArray`.
 public func roll(_ array: NDArray, _ shift: Int, axis: Int? = nil) -> NDArray {
   array.roll(shift, axis: axis)
 }

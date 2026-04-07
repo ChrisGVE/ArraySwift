@@ -14,7 +14,12 @@ extension NDArray {
 
   // MARK: - Basic Math
 
-  /// Absolute value of each element.
+  /// Element-wise absolute value. Equivalent to NumPy's `numpy.abs`.
+  ///
+  /// For complex arrays computes the modulus `|z| = sqrt(re² + im²)` via vDSP,
+  /// returning a real (`float64`) array.
+  ///
+  /// - Returns: An `NDArray` of absolute values (always real).
   public func abs() -> NDArray {
     if isComplex, let imagPart = imag {
       var result = [Double](repeating: 0, count: size)
@@ -37,9 +42,13 @@ extension NDArray {
     return NDArray(shape: shape, data: result)
   }
 
-  /// Square root of each element.
-  /// For complex arrays, returns complex square root.
-  /// For real arrays with negative values, returns NaN (use csqrt for complex result).
+  /// Element-wise square root. Equivalent to NumPy's `numpy.sqrt`.
+  ///
+  /// For complex arrays delegates to ``csqrt()`` and returns a complex result.
+  /// For real arrays negative values produce `NaN`; call ``csqrt()`` directly
+  /// when a complex result is needed for a real input.
+  ///
+  /// - Returns: An `NDArray` of square root values.
   public func sqrt() -> NDArray {
     if isComplex {
       return csqrt()
@@ -51,7 +60,11 @@ extension NDArray {
     return NDArray(shape: shape, data: result)
   }
 
-  /// Square of each element.
+  /// Element-wise square (x²). Equivalent to NumPy's `numpy.square`.
+  ///
+  /// For complex arrays uses the identity `(a + bi)² = (a² - b²) + 2abi`.
+  ///
+  /// - Returns: An `NDArray` of squared values (preserves complex dtype).
   public func square() -> NDArray {
     if isComplex, let imagPart = imag {
       // (a + bi)² = a² - b² + 2abi
@@ -73,7 +86,13 @@ extension NDArray {
     return NDArray(shape: shape, data: result)
   }
 
-  /// Sign of each element (-1, 0, or 1 for real; z/|z| for complex).
+  /// Element-wise sign. Equivalent to NumPy's `numpy.sign`.
+  ///
+  /// - For real arrays: returns `-1`, `0`, or `1`.
+  /// - For complex arrays: returns `z / |z|` (unit vector in the complex plane), or `0`
+  ///   when `z == 0`.
+  ///
+  /// - Returns: An `NDArray` of sign values (preserves complex dtype).
   public func sign() -> NDArray {
     if isComplex, let imagPart = imag {
       // sign(z) = z / |z| (normalized to unit circle, 0 if z = 0)
@@ -100,7 +119,11 @@ extension NDArray {
 
   // MARK: - Exponential and Logarithmic
 
-  /// Exponential of each element.
+  /// Element-wise natural exponential (eˣ). Equivalent to NumPy's `numpy.exp`.
+  ///
+  /// For complex arrays uses Euler's formula: `exp(a + bi) = exp(a) * (cos(b) + i*sin(b))`.
+  ///
+  /// - Returns: An `NDArray` of exponential values (preserves complex dtype).
   public func exp() -> NDArray {
     if isComplex, let imagPart = imag {
       // exp(a + bi) = exp(a) * (cos(b) + i*sin(b))
@@ -122,7 +145,11 @@ extension NDArray {
     return NDArray(shape: shape, data: result)
   }
 
-  /// Natural logarithm of each element.
+  /// Element-wise natural logarithm. Equivalent to NumPy's `numpy.log`.
+  ///
+  /// For complex arrays uses `log(z) = log|z| + i * arg(z)`.
+  ///
+  /// - Returns: An `NDArray` of logarithm values (preserves complex dtype).
   public func log() -> NDArray {
     if isComplex, let imagPart = imag {
       // log(a + bi) = log(|z|) + i*arg(z)
@@ -217,7 +244,11 @@ extension NDArray {
 
   // MARK: - Trigonometric Functions
 
-  /// Sine of each element.
+  /// Element-wise sine (in radians). Equivalent to NumPy's `numpy.sin`.
+  ///
+  /// For complex arrays uses `sin(a + bi) = sin(a)cosh(b) + i*cos(a)sinh(b)`.
+  ///
+  /// - Returns: An `NDArray` of sine values (preserves complex dtype).
   public func sin() -> NDArray {
     if isComplex, let imagPart = imag {
       // sin(a + bi) = sin(a)cosh(b) + i*cos(a)sinh(b)
@@ -238,7 +269,11 @@ extension NDArray {
     return NDArray(shape: shape, data: result)
   }
 
-  /// Cosine of each element.
+  /// Element-wise cosine (in radians). Equivalent to NumPy's `numpy.cos`.
+  ///
+  /// For complex arrays uses `cos(a + bi) = cos(a)cosh(b) - i*sin(a)sinh(b)`.
+  ///
+  /// - Returns: An `NDArray` of cosine values (preserves complex dtype).
   public func cos() -> NDArray {
     if isComplex, let imagPart = imag {
       // cos(a + bi) = cos(a)cosh(b) - i*sin(a)sinh(b)
@@ -259,7 +294,11 @@ extension NDArray {
     return NDArray(shape: shape, data: result)
   }
 
-  /// Tangent of each element.
+  /// Element-wise tangent (in radians). Equivalent to NumPy's `numpy.tan`.
+  ///
+  /// For complex arrays computed as `sin(z) / cos(z)`.
+  ///
+  /// - Returns: An `NDArray` of tangent values (preserves complex dtype).
   public func tan() -> NDArray {
     if isComplex {
       // tan(z) = sin(z) / cos(z)
@@ -359,7 +398,12 @@ extension NDArray {
     return NDArray(shape: shape, data: result)
   }
 
-  /// Arctangent of y/x considering quadrant.
+  /// Element-wise four-quadrant arctangent of `self / other` (y/x).
+  ///
+  /// Equivalent to NumPy's `numpy.arctan2`. Only supported for real arrays.
+  ///
+  /// - Parameter other: The x (denominator) array.
+  /// - Returns: Angles in radians in the range `(-π, π]`.
   public func arctan2(_ other: NDArray) -> NDArray {
     var result = [Double](repeating: 0, count: size)
     var count = Int32(size)
@@ -369,7 +413,11 @@ extension NDArray {
 
   // MARK: - Hyperbolic Functions
 
-  /// Hyperbolic sine of each element.
+  /// Element-wise hyperbolic sine. Equivalent to NumPy's `numpy.sinh`.
+  ///
+  /// For complex arrays uses `sinh(a + bi) = sinh(a)cos(b) + i*cosh(a)sin(b)`.
+  ///
+  /// - Returns: An `NDArray` of hyperbolic sine values (preserves complex dtype).
   public func sinh() -> NDArray {
     if isComplex, let imagPart = imag {
       // sinh(a + bi) = sinh(a)cos(b) + i*cosh(a)sin(b)
@@ -390,7 +438,11 @@ extension NDArray {
     return NDArray(shape: shape, data: result)
   }
 
-  /// Hyperbolic cosine of each element.
+  /// Element-wise hyperbolic cosine. Equivalent to NumPy's `numpy.cosh`.
+  ///
+  /// For complex arrays uses `cosh(a + bi) = cosh(a)cos(b) + i*sinh(a)sin(b)`.
+  ///
+  /// - Returns: An `NDArray` of hyperbolic cosine values (preserves complex dtype).
   public func cosh() -> NDArray {
     if isComplex, let imagPart = imag {
       // cosh(a + bi) = cosh(a)cos(b) + i*sinh(a)sin(b)
@@ -411,7 +463,11 @@ extension NDArray {
     return NDArray(shape: shape, data: result)
   }
 
-  /// Hyperbolic tangent of each element.
+  /// Element-wise hyperbolic tangent. Equivalent to NumPy's `numpy.tanh`.
+  ///
+  /// For complex arrays computed as `sinh(z) / cosh(z)`.
+  ///
+  /// - Returns: An `NDArray` of hyperbolic tangent values (preserves complex dtype).
   public func tanh() -> NDArray {
     if isComplex {
       // tanh(z) = sinh(z) / cosh(z)
@@ -482,7 +538,8 @@ extension NDArray {
 
   // MARK: - Rounding Functions
 
-  /// Floor of each element.
+  /// Element-wise floor (round toward negative infinity). Equivalent to NumPy's `numpy.floor`.
+  /// - Returns: A real `NDArray` of floor values.
   public func floor() -> NDArray {
     var result = real
     var count = Int32(size)
@@ -490,7 +547,8 @@ extension NDArray {
     return NDArray(shape: shape, data: result)
   }
 
-  /// Ceiling of each element.
+  /// Element-wise ceiling (round toward positive infinity). Equivalent to NumPy's `numpy.ceil`.
+  /// - Returns: A real `NDArray` of ceiling values.
   public func ceil() -> NDArray {
     var result = real
     var count = Int32(size)
@@ -498,7 +556,8 @@ extension NDArray {
     return NDArray(shape: shape, data: result)
   }
 
-  /// Round each element to nearest integer.
+  /// Element-wise rounding to the nearest integer (ties to even). Equivalent to NumPy's `numpy.round`.
+  /// - Returns: A real `NDArray` of rounded values.
   public func round() -> NDArray {
     var result = real
     var count = Int32(size)
@@ -506,7 +565,8 @@ extension NDArray {
     return NDArray(shape: shape, data: result)
   }
 
-  /// Truncate each element towards zero.
+  /// Element-wise truncation toward zero. Equivalent to NumPy's `numpy.trunc`.
+  /// - Returns: A real `NDArray` of truncated values.
   public func trunc() -> NDArray {
     var result = [Double](repeating: 0, count: size)
     for i in 0..<size {
@@ -517,7 +577,14 @@ extension NDArray {
 
   // MARK: - Clipping
 
-  /// Clip values to a range.
+  /// Clip values to the closed interval `[min, max]`. Equivalent to NumPy's `numpy.clip`.
+  ///
+  /// Only supported for real arrays. Uses `vDSP_vclipD` for vectorised execution.
+  ///
+  /// - Parameters:
+  ///   - min: Lower bound; values below this are set to `min`.
+  ///   - max: Upper bound; values above this are set to `max`.
+  /// - Returns: A real `NDArray` with values clamped to `[min, max]`.
   public func clip(min: Double, max: Double) -> NDArray {
     var result = [Double](repeating: 0, count: size)
     var low = min
@@ -528,7 +595,12 @@ extension NDArray {
 
   // MARK: - Complex-Specific Functions
 
-  /// Phase angle (argument) of complex elements.
+  /// Element-wise phase angle (argument) of complex values.
+  ///
+  /// Equivalent to NumPy's `numpy.angle`. For real arrays returns `0` for non-negative
+  /// values and `π` for negative values.
+  ///
+  /// - Returns: A real `NDArray` of phase angles in radians, in the range `(-π, π]`.
   public func angle() -> NDArray {
     if isComplex, let imagPart = imag {
       var result = [Double](repeating: 0, count: size)
@@ -554,7 +626,12 @@ extension NDArray {
     return NDArray(shape: shape, data: result)
   }
 
-  /// Complex conjugate.
+  /// Returns the complex conjugate by negating the imaginary part.
+  ///
+  /// For real arrays, returns a copy unchanged.
+  /// Uses vDSP for vectorized negation.
+  ///
+  /// - Returns: A complex128 array with the conjugated values, or a copy for real arrays.
   public func conjugate() -> NDArray {
     guard isComplex, let imagPart = imag else { return self }
 
@@ -564,12 +641,21 @@ extension NDArray {
     return NDArray(shape: shape, dtype: .complex128, real: real, imag: resultImag)
   }
 
-  /// Extract real part.
+  /// Returns a float64 array containing only the real parts.
+  ///
+  /// For complex arrays, extracts the real components. For real arrays, returns a copy.
+  ///
+  /// - Returns: A float64 array with the same shape, containing the real part of each element.
   public func realPart() -> NDArray {
     NDArray(shape: shape, data: real)
   }
 
-  /// Extract imaginary part.
+  /// Returns a float64 array containing only the imaginary parts.
+  ///
+  /// For complex arrays, extracts the imaginary components.
+  /// For real arrays, returns a zero-filled array with the same shape.
+  ///
+  /// - Returns: A float64 array with the same shape, containing the imaginary part of each element.
   public func imagPart() -> NDArray {
     let imagData = imag ?? [Double](repeating: 0, count: size)
     return NDArray(shape: shape, data: imagData)
@@ -577,7 +663,12 @@ extension NDArray {
 
   // MARK: - Complex Square Root and Log
 
-  /// Complex square root (handles negative numbers).
+  /// Element-wise complex square root, handling negative real inputs correctly.
+  ///
+  /// Works on both real and complex arrays by treating inputs as complex numbers.
+  /// Computed as `sqrt(r) * (cos(θ/2) + i*sin(θ/2))` where `r = |z|` and `θ = arg(z)`.
+  ///
+  /// - Returns: A `.complex128` `NDArray` of complex square roots.
   public func csqrt() -> NDArray {
     var resultReal = [Double](repeating: 0, count: size)
     var resultImag = [Double](repeating: 0, count: size)
@@ -597,7 +688,12 @@ extension NDArray {
     return NDArray.complexArray(shape: shape, real: resultReal, imag: resultImag)
   }
 
-  /// Complex logarithm.
+  /// Element-wise complex natural logarithm.
+  ///
+  /// Works on both real and complex arrays by treating inputs as complex numbers.
+  /// Computed as `log(r) + i*arg(z)` where `r = |z|` and `arg(z)` is the phase angle.
+  ///
+  /// - Returns: A `.complex128` `NDArray` of complex logarithm values.
   public func clog() -> NDArray {
     var resultReal = [Double](repeating: 0, count: size)
     var resultImag = [Double](repeating: 0, count: size)

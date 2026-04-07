@@ -81,22 +81,38 @@ public enum NDArrayError: Error, CustomStringConvertible {
 /// N-dimensional array representation with split storage for complex support
 /// Uses separate real/imag arrays for optimal vDSP vectorization
 public struct NDArray: Sendable {
+  /// The shape of the array as a list of dimension sizes.
   public internal(set) var shape: [Int]
-  public internal(set) var dtype: ArrayDType
-  public internal(set) var real: [Double]  // Real part (always present)
-  public internal(set) var imag: [Double]?  // Imaginary part (only for complex128)
 
+  /// The element type of the array.
+  public internal(set) var dtype: ArrayDType
+
+  /// Real part of the array data (always present).
+  public internal(set) var real: [Double]
+
+  /// Imaginary part of the array data (present only for `.complex128` arrays).
+  public internal(set) var imag: [Double]?
+
+  /// Number of dimensions (axes) in the array. Equivalent to NumPy's `ndarray.ndim`.
   public var ndim: Int { shape.count }
+
+  /// Total number of elements in the array. Equivalent to NumPy's `ndarray.size`.
   public var size: Int { real.count }
+
+  /// Whether this array stores complex numbers.
   public var isComplex: Bool { dtype.isComplex }
 
-  /// Backward compatibility: access real data as 'data'
+  /// Backward-compatibility alias for `real`. Equivalent to accessing the real part directly.
   public internal(set) var data: [Double] {
     get { real }
     set { real = newValue }
   }
 
-  /// Calculate strides for row-major (C-style) ordering
+  /// Row-major (C-style) strides for each dimension.
+  ///
+  /// Each entry gives the number of elements to skip in the flat storage to advance
+  /// one step along that dimension. Equivalent to NumPy's `ndarray.strides` (in
+  /// elements rather than bytes).
   public var strides: [Int] {
     var result = [Int](repeating: 1, count: shape.count)
     for i in stride(from: shape.count - 2, through: 0, by: -1) {
@@ -105,7 +121,9 @@ public struct NDArray: Sendable {
     return result
   }
 
-  /// Convert multi-dimensional index to flat index
+  /// Convert a multi-dimensional index to a flat (linear) storage index.
+  /// - Parameter indices: One index per dimension; must have the same count as `ndim`.
+  /// - Returns: The corresponding flat index into `real` (and `imag`).
   public func flatIndex(_ indices: [Int]) -> Int {
     let strides = self.strides
     var index = 0
@@ -117,7 +135,14 @@ public struct NDArray: Sendable {
 
   // MARK: - Initializers
 
-  /// Create a real (float64) array - backward compatible initializer
+  /// Create a real (`float64`) array from a flat data buffer.
+  ///
+  /// This is the primary backward-compatible initializer. The product of all values
+  /// in `shape` must equal `data.count`.
+  ///
+  /// - Parameters:
+  ///   - shape: Array dimensions.
+  ///   - data: Flat element storage in row-major order.
   public init(shape: [Int], data: [Double]) {
     let expectedSize = shape.reduce(1, *)
     precondition(
@@ -130,7 +155,16 @@ public struct NDArray: Sendable {
     self.imag = nil
   }
 
-  /// Create array with explicit dtype
+  /// Create an array with an explicit dtype and separate real/imaginary buffers.
+  ///
+  /// For `.float64` arrays pass `nil` for `imag`. For `.complex128` arrays `imag`
+  /// must have the same count as `real`.
+  ///
+  /// - Parameters:
+  ///   - shape: Array dimensions.
+  ///   - dtype: Element type (`.float64` or `.complex128`).
+  ///   - real: Real part storage in row-major order.
+  ///   - imag: Imaginary part storage, or `nil` for real arrays.
   public init(shape: [Int], dtype: ArrayDType, real: [Double], imag: [Double]?) {
     let expectedSize = shape.reduce(1, *)
     precondition(
@@ -151,19 +185,35 @@ public struct NDArray: Sendable {
 
   // MARK: - Factory Methods
 
-  /// Create a real (float64) array
+  /// Create a real (`.float64`) array from a flat data buffer.
+  /// - Parameters:
+  ///   - shape: Array dimensions.
+  ///   - data: Flat element storage in row-major order.
+  /// - Returns: A new real `NDArray`.
   public static func realArray(shape: [Int], data: [Double]) -> NDArray {
     NDArray(shape: shape, dtype: .float64, real: data, imag: nil)
   }
 
-  /// Create a complex (complex128) array from split real/imag parts
+  /// Create a complex (`.complex128`) array from separate real and imaginary buffers.
+  /// - Parameters:
+  ///   - shape: Array dimensions.
+  ///   - real: Real part storage in row-major order.
+  ///   - imag: Imaginary part storage (must have the same count as `real`).
+  /// - Returns: A new complex `NDArray`.
   public static func complexArray(shape: [Int], real: [Double], imag: [Double]) -> NDArray {
     precondition(real.count == imag.count, "real and imag arrays must have same size")
     return NDArray(shape: shape, dtype: .complex128, real: real, imag: imag)
   }
 
-  /// Create a complex array from interleaved format [r0, i0, r1, i1, ...]
-  /// Uses vDSP for SIMD-optimized deinterleaving
+  /// Create a `.complex128` array from interleaved format `[r0, i0, r1, i1, ...]`.
+  ///
+  /// Uses `vDSP_ctozD` for SIMD-optimised deinterleaving. The interleaved buffer length
+  /// divided by two must equal the product of the values in `shape`.
+  ///
+  /// - Parameters:
+  ///   - shape: Array dimensions.
+  ///   - interleaved: Alternating real/imaginary values in row-major order.
+  /// - Returns: A new `.complex128` `NDArray`.
   public static func fromInterleaved(shape: [Int], interleaved: [Double]) -> NDArray {
     precondition(interleaved.count % 2 == 0, "interleaved array must have even count")
     let count = interleaved.count / 2
@@ -193,9 +243,11 @@ public struct NDArray: Sendable {
     return NDArray(shape: shape, dtype: .complex128, real: realPart, imag: imagPart)
   }
 
-  /// Convert complex array to interleaved format [r0, i0, r1, i1, ...]
-  /// Uses vDSP for SIMD-optimized interleaving
-  /// Returns nil for real arrays
+  /// Convert a complex array to interleaved format `[r0, i0, r1, i1, ...]`.
+  ///
+  /// Uses `vDSP_ztocD` for SIMD-optimised interleaving.
+  ///
+  /// - Returns: A flat buffer of alternating real/imaginary values, or `nil` for real arrays.
   public func toInterleaved() -> [Double]? {
     guard isComplex, let imagPart = imag else { return nil }
 
@@ -233,22 +285,39 @@ public struct NDArray: Sendable {
     return false
   }
 
-  /// Get real element at flat index
+  /// Get the real part of the element at the given flat index.
+  /// - Parameter index: Flat (linear) index into the storage buffer.
+  /// - Returns: The real component at that position.
   public func getReal(at index: Int) -> Double {
     real[index]
   }
 
-  /// Get complex element at flat index as (re, im) tuple
+  /// Get the complex element at the given flat index as a `(re, im)` tuple.
+  ///
+  /// For real arrays the imaginary component is always `0`.
+  ///
+  /// - Parameter index: Flat (linear) index into the storage buffer.
+  /// - Returns: A tuple `(re:, im:)` with the real and imaginary components.
   public func getComplex(at index: Int) -> (re: Double, im: Double) {
     (real[index], imag?[index] ?? 0)
   }
 
-  /// Set real element at flat index
+  /// Set the real part of the element at the given flat index.
+  /// - Parameters:
+  ///   - index: Flat (linear) index into the storage buffer.
+  ///   - value: New real value.
   public mutating func setReal(at index: Int, value: Double) {
     real[index] = value
   }
 
-  /// Set complex element at flat index
+  /// Set a complex element at the given flat index.
+  ///
+  /// For real arrays the imaginary component is silently ignored.
+  ///
+  /// - Parameters:
+  ///   - index: Flat (linear) index into the storage buffer.
+  ///   - re: Real component.
+  ///   - im: Imaginary component.
   public mutating func setComplex(at index: Int, re: Double, im: Double) {
     real[index] = re
     if imag != nil {
@@ -256,7 +325,11 @@ public struct NDArray: Sendable {
     }
   }
 
-  /// Promote real array to complex (with zero imaginary part)
+  /// Return a copy of this array promoted to `.complex128` with a zero imaginary part.
+  ///
+  /// If the array is already complex, `self` is returned unchanged.
+  ///
+  /// - Returns: A `.complex128` array with the same real data and zeros for the imaginary part.
   public func promoteToComplex() -> NDArray {
     if isComplex { return self }
     return NDArray(
@@ -269,13 +342,20 @@ public struct NDArray: Sendable {
 
   // MARK: - Subscript Operators
 
-  /// Access element at flat index (1D arrays or linear access)
+  /// Access a real element by flat (linear) index.
+  ///
+  /// Equivalent to `arr.real[index]`. For 1-D arrays this matches standard integer indexing.
+  ///
+  /// - Parameter index: Zero-based flat index.
   public subscript(index: Int) -> Double {
     get { real[index] }
     set { real[index] = newValue }
   }
 
-  /// Access element at 2D indices
+  /// Access a real element in a 2-D array by row and column indices.
+  /// - Parameters:
+  ///   - row: Zero-based row index.
+  ///   - col: Zero-based column index.
   public subscript(row: Int, col: Int) -> Double {
     get {
       precondition(ndim == 2, "2D subscript requires 2D array")
@@ -287,7 +367,11 @@ public struct NDArray: Sendable {
     }
   }
 
-  /// Access element at 3D indices
+  /// Access a real element in a 3-D array.
+  /// - Parameters:
+  ///   - d0: Index along the first dimension.
+  ///   - d1: Index along the second dimension.
+  ///   - d2: Index along the third dimension.
   public subscript(d0: Int, d1: Int, d2: Int) -> Double {
     get {
       precondition(ndim == 3, "3D subscript requires 3D array")
@@ -299,7 +383,8 @@ public struct NDArray: Sendable {
     }
   }
 
-  /// Access element at N-dimensional indices
+  /// Access a real element using an array of N-dimensional indices.
+  /// - Parameter indices: One index per dimension; count must equal `ndim`.
   public subscript(indices: [Int]) -> Double {
     get {
       precondition(indices.count == ndim, "Index count must match dimensions")
@@ -311,7 +396,10 @@ public struct NDArray: Sendable {
     }
   }
 
-  /// Access row slice from 2D array
+  /// Extract a single row from a 2-D array as a 1-D array.
+  ///
+  /// - Parameter row: Zero-based row index. Supports complex arrays.
+  /// - Returns: A 1-D `NDArray` containing the row elements.
   public subscript(row row: Int) -> NDArray {
     get {
       precondition(ndim == 2, "Row subscript requires 2D array")
@@ -326,7 +414,10 @@ public struct NDArray: Sendable {
     }
   }
 
-  /// Access column slice from 2D array
+  /// Extract a single column from a 2-D array as a 1-D array.
+  ///
+  /// - Parameter col: Zero-based column index. Supports complex arrays.
+  /// - Returns: A 1-D `NDArray` containing the column elements.
   public subscript(col col: Int) -> NDArray {
     get {
       precondition(ndim == 2, "Column subscript requires 2D array")
@@ -347,7 +438,10 @@ public struct NDArray: Sendable {
     }
   }
 
-  /// Access range of elements (1D slice)
+  /// Extract a contiguous slice of elements as a 1-D array.
+  ///
+  /// - Parameter range: Half-open range of flat indices. Supports complex arrays.
+  /// - Returns: A 1-D `NDArray` with the specified elements.
   public subscript(range: Range<Int>) -> NDArray {
     get {
       let sliceData = Array(real[range])
@@ -360,7 +454,12 @@ public struct NDArray: Sendable {
     }
   }
 
-  /// Access sub-matrix with row and column ranges
+  /// Extract a sub-matrix from a 2-D array using row and column ranges.
+  ///
+  /// - Parameters:
+  ///   - rowRange: Half-open range of row indices.
+  ///   - colRange: Half-open range of column indices.
+  /// - Returns: A 2-D `NDArray` sub-matrix. Supports complex arrays.
   public subscript(rowRange: Range<Int>, colRange: Range<Int>) -> NDArray {
     get {
       precondition(ndim == 2, "Range subscript requires 2D array")
@@ -389,7 +488,11 @@ public struct NDArray: Sendable {
     }
   }
 
-  /// Access complex element at flat index, returning tuple
+  /// Access a complex element by flat index, returning a `(real:, imag:)` tuple.
+  ///
+  /// For real arrays the imaginary component is always `0`.
+  ///
+  /// - Parameter index: Flat (linear) index.
   public subscript(complex index: Int) -> (real: Double, imag: Double) {
     get {
       (real[index], imag?[index] ?? 0)
@@ -402,7 +505,11 @@ public struct NDArray: Sendable {
     }
   }
 
-  /// Access complex element at 2D indices, returning tuple
+  /// Access a complex element in a 2-D array by row/column, returning a `(real:, imag:)` tuple.
+  ///
+  /// - Parameters:
+  ///   - row: Zero-based row index.
+  ///   - col: Zero-based column index.
   public subscript(complex row: Int, _ col: Int) -> (real: Double, imag: Double) {
     get {
       precondition(ndim == 2, "2D subscript requires 2D array")
@@ -423,6 +530,9 @@ public struct NDArray: Sendable {
 // MARK: - Protocol Conformances
 
 extension NDArray: Equatable {
+  /// Returns `true` when both arrays have identical shape, dtype, and element values.
+  ///
+  /// For complex arrays both `real` and `imag` buffers are compared element-wise.
   public static func == (lhs: NDArray, rhs: NDArray) -> Bool {
     guard lhs.shape == rhs.shape else { return false }
     guard lhs.dtype == rhs.dtype else { return false }
@@ -435,6 +545,10 @@ extension NDArray: Equatable {
 }
 
 extension NDArray: CustomStringConvertible {
+  /// A human-readable representation of the array, truncating large dimensions.
+  ///
+  /// Mirrors NumPy's default array print format: brackets around elements, `...` for
+  /// large arrays, and a dtype suffix for complex arrays.
   public var description: String {
     if ndim == 0 {
       return "NDArray()"
@@ -528,6 +642,7 @@ extension NDArray: CustomStringConvertible {
 }
 
 extension NDArray: CustomDebugStringConvertible {
+  /// A detailed description including shape, dtype, size, and strides.
   public var debugDescription: String {
     let dtype = isComplex ? ", dtype: complex128" : ", dtype: float64"
     return "NDArray(shape: \(shape)\(dtype), size: \(size), strides: \(strides))"

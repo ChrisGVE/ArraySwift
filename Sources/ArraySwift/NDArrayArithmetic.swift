@@ -88,7 +88,12 @@ extension NDArray {
     return NDArray(shape: resultShape, data: result)
   }
 
-  /// Raise to power element-wise.
+  /// Raise every element to a scalar power. Equivalent to NumPy's `numpy.power`.
+  ///
+  /// Only supported for real arrays.
+  ///
+  /// - Parameter exponent: Scalar exponent applied to each element.
+  /// - Returns: A real `NDArray` of powered values.
   public func power(_ exponent: Double) -> NDArray {
     var result = [Double](repeating: 0, count: size)
     for i in 0..<size {
@@ -97,7 +102,12 @@ extension NDArray {
     return NDArray(shape: shape, data: result)
   }
 
-  /// Raise to power element-wise (array exponent).
+  /// Element-wise power with broadcasting. Equivalent to NumPy's `numpy.power`.
+  ///
+  /// Only supported for real arrays.
+  ///
+  /// - Parameter other: Exponent array (broadcast-compatible).
+  /// - Returns: A real `NDArray` where each element is `self[i] ** other[i]`.
   public func power(_ other: NDArray) -> NDArray {
     let (a, b, resultShape) = broadcast(self, other)
     var result = [Double](repeating: 0, count: a.size)
@@ -109,7 +119,9 @@ extension NDArray {
 
   // MARK: - Scalar Operations
 
-  /// Add a scalar to all elements.
+  /// Add a scalar to every element. Uses vDSP for vectorised execution.
+  /// - Parameter scalar: Value to add.
+  /// - Returns: A new `NDArray` with the scalar added to each element.
   public func add(_ scalar: Double) -> NDArray {
     var result = [Double](repeating: 0, count: size)
     var s = scalar
@@ -117,12 +129,16 @@ extension NDArray {
     return NDArray(shape: shape, data: result)
   }
 
-  /// Subtract a scalar from all elements.
+  /// Subtract a scalar from every element.
+  /// - Parameter scalar: Value to subtract.
+  /// - Returns: A new `NDArray` with the scalar subtracted from each element.
   public func subtract(_ scalar: Double) -> NDArray {
     add(-scalar)
   }
 
-  /// Multiply all elements by a scalar.
+  /// Multiply every element by a scalar. Uses vDSP for vectorised execution.
+  /// - Parameter scalar: Scaling factor.
+  /// - Returns: A new `NDArray` with each element multiplied by the scalar.
   public func multiply(_ scalar: Double) -> NDArray {
     var result = [Double](repeating: 0, count: size)
     var s = scalar
@@ -130,7 +146,9 @@ extension NDArray {
     return NDArray(shape: shape, data: result)
   }
 
-  /// Divide all elements by a scalar.
+  /// Divide every element by a scalar. Uses vDSP for vectorised execution.
+  /// - Parameter scalar: Divisor.
+  /// - Returns: A new `NDArray` with each element divided by the scalar.
   public func divide(_ scalar: Double) -> NDArray {
     var result = [Double](repeating: 0, count: size)
     var s = scalar
@@ -138,7 +156,9 @@ extension NDArray {
     return NDArray(shape: shape, data: result)
   }
 
-  /// Divide scalar by all elements.
+  /// Compute `scalar / x` for every element `x`. Uses vDSP for vectorised execution.
+  /// - Parameter scalar: Dividend.
+  /// - Returns: A new `NDArray` where each element is `scalar / element`.
   public func scalarDivide(_ scalar: Double) -> NDArray {
     var result = [Double](repeating: 0, count: size)
     var s = scalar
@@ -148,7 +168,13 @@ extension NDArray {
 
   // MARK: - Modulo Operations
 
-  /// Element-wise modulo operation.
+  /// Element-wise truncating remainder (C-style `%`). Equivalent to NumPy's `numpy.fmod`.
+  ///
+  /// The result has the same sign as the dividend. For Python-style (floor) modulo use
+  /// ``floorMod(_:)``.
+  ///
+  /// - Parameter other: Divisor array (broadcast-compatible).
+  /// - Returns: A real `NDArray` of remainders.
   public func mod(_ other: NDArray) -> NDArray {
     let (a, b, resultShape) = broadcast(self, other)
     var result = [Double](repeating: 0, count: a.size)
@@ -158,7 +184,12 @@ extension NDArray {
     return NDArray(shape: resultShape, data: result)
   }
 
-  /// Element-wise floor modulo (Python-style %).
+  /// Element-wise floor modulo (Python-style `%`). Equivalent to NumPy's `numpy.mod`.
+  ///
+  /// The result has the same sign as the divisor, matching Python's `%` semantics.
+  ///
+  /// - Parameter other: Divisor array (broadcast-compatible).
+  /// - Returns: A real `NDArray` of floor remainders.
   public func floorMod(_ other: NDArray) -> NDArray {
     let (a, b, resultShape) = broadcast(self, other)
     var result = [Double](repeating: 0, count: a.size)
@@ -234,8 +265,9 @@ extension NDArray {
     }
 
     var result = [Double](repeating: 0, count: m * n)
-    vDSP_mmulD(real, 1, other.real, 1, &result, 1,
-               vDSP_Length(m), vDSP_Length(n), vDSP_Length(k))
+    vDSP_mmulD(
+      real, 1, other.real, 1, &result, 1,
+      vDSP_Length(m), vDSP_Length(n), vDSP_Length(k))
     return NDArray(shape: [m, n], data: result)
   }
 
@@ -251,8 +283,10 @@ extension NDArray {
       var resultImag = [Double](repeating: 0, count: m)
       for i in 0..<m {
         for j in 0..<n {
-          let ar = real[i * n + j], ai = matImag[i * n + j]
-          let br = vec.real[j], bi = vecImag[j]
+          let ar = real[i * n + j]
+          let ai = matImag[i * n + j]
+          let br = vec.real[j]
+          let bi = vecImag[j]
           resultReal[i] += ar * br - ai * bi
           resultImag[i] += ar * bi + ai * br
         }
@@ -281,8 +315,10 @@ extension NDArray {
       var resultImag = [Double](repeating: 0, count: n)
       for j in 0..<n {
         for i in 0..<m {
-          let ar = real[i], ai = vecImag[i]
-          let br = mat.real[i * n + j], bi = matImag[i * n + j]
+          let ar = real[i]
+          let ai = vecImag[i]
+          let br = mat.real[i * n + j]
+          let bi = matImag[i * n + j]
           resultReal[j] += ar * br - ai * bi
           resultImag[j] += ar * bi + ai * br
         }
@@ -386,9 +422,14 @@ extension NDArray {
 
   // MARK: - Inner Product
 
-  /// Compute the inner product of two arrays.
-  /// For 1-D arrays, this is the same as dot product.
-  /// For N-D arrays, this sums over the last axes of both arrays.
+  /// Compute the inner product of two arrays. Equivalent to NumPy's `numpy.inner`.
+  ///
+  /// - For 1-D inputs: same as ``dot(_:)``.
+  /// - For N-D inputs: contracts the last axis of both arrays, producing a result
+  ///   with shape `self.shape[:-1] + other.shape[:-1]`.
+  ///
+  /// - Parameter other: Second operand. Last dimensions must match.
+  /// - Returns: A new `NDArray` inner product.
   public func inner(_ other: NDArray) -> NDArray {
     if ndim == 1 && other.ndim == 1 {
       return dot(other)
@@ -430,8 +471,13 @@ extension NDArray {
 
   // MARK: - Outer Product
 
-  /// Compute the outer product of two vectors.
-  /// Returns a matrix where result[i,j] = a[i] * b[j].
+  /// Compute the outer product of two vectors. Equivalent to NumPy's `numpy.outer`.
+  ///
+  /// Both inputs are first flattened to 1-D. Returns a 2-D matrix `C` where
+  /// `C[i, j] = self[i] * other[j]`.
+  ///
+  /// - Parameter other: Second vector.
+  /// - Returns: A 2-D `NDArray` of shape `[self.size, other.size]`.
   public func outer(_ other: NDArray) -> NDArray {
     let flat = flatten()
     let otherFlat = other.flatten()
@@ -455,7 +501,8 @@ private func complexDot1D(_ a: NDArray, _ b: NDArray) -> NDArray {
   let n = a.size
   let aImag = a.imag!
   let bImag = b.imag!
-  var sumR = 0.0, sumI = 0.0
+  var sumR = 0.0
+  var sumI = 0.0
   for idx in 0..<n {
     sumR += a.real[idx] * b.real[idx] - aImag[idx] * bImag[idx]
     sumI += a.real[idx] * bImag[idx] + aImag[idx] * b.real[idx]
@@ -700,7 +747,8 @@ private func broadcastTo(_ array: NDArray, shape: [Int]) -> NDArray {
   }
 
   // Fill result array
-  var resultImag: [Double]? = array.isComplex
+  var resultImag: [Double]? =
+    array.isComplex
     ? [Double](repeating: 0, count: resultSize) : nil
 
   for i in 0..<resultSize {
@@ -1064,88 +1112,109 @@ public func outer(_ a: NDArray, _ b: NDArray) -> NDArray { a.outer(b) }
 // MARK: - Operators
 
 extension NDArray {
+  /// Element-wise addition with broadcasting. Equivalent to NumPy's `+` operator.
   public static func + (lhs: NDArray, rhs: NDArray) -> NDArray {
     lhs.add(rhs)
   }
 
+  /// Element-wise subtraction with broadcasting. Equivalent to NumPy's `-` operator.
   public static func - (lhs: NDArray, rhs: NDArray) -> NDArray {
     lhs.subtract(rhs)
   }
 
+  /// Element-wise multiplication with broadcasting. Equivalent to NumPy's `*` operator.
   public static func * (lhs: NDArray, rhs: NDArray) -> NDArray {
     lhs.multiply(rhs)
   }
 
+  /// Element-wise division with broadcasting. Equivalent to NumPy's `/` operator.
   public static func / (lhs: NDArray, rhs: NDArray) -> NDArray {
     lhs.divide(rhs)
   }
 
+  /// Unary negation of all elements.
   public static prefix func - (array: NDArray) -> NDArray {
     array.negated()
   }
 
+  /// Add a scalar to every element.
   public static func + (lhs: NDArray, rhs: Double) -> NDArray {
     lhs.add(rhs)
   }
 
+  /// Add a scalar to every element (scalar on the left).
   public static func + (lhs: Double, rhs: NDArray) -> NDArray {
     rhs.add(lhs)
   }
 
+  /// Subtract a scalar from every element.
   public static func - (lhs: NDArray, rhs: Double) -> NDArray {
     lhs.subtract(rhs)
   }
 
+  /// Subtract every element from a scalar (scalar on the left).
   public static func - (lhs: Double, rhs: NDArray) -> NDArray {
     rhs.negated().add(lhs)
   }
 
+  /// Multiply every element by a scalar.
   public static func * (lhs: NDArray, rhs: Double) -> NDArray {
     lhs.multiply(rhs)
   }
 
+  /// Multiply every element by a scalar (scalar on the left).
   public static func * (lhs: Double, rhs: NDArray) -> NDArray {
     rhs.multiply(lhs)
   }
 
+  /// Divide every element by a scalar.
   public static func / (lhs: NDArray, rhs: Double) -> NDArray {
     lhs.divide(rhs)
   }
 
+  /// Divide a scalar by every element (scalar on the left).
   public static func / (lhs: Double, rhs: NDArray) -> NDArray {
     rhs.scalarDivide(lhs)
   }
 
   // MARK: - Compound Assignment Operators
 
+  /// Add `rhs` to `lhs` in place, with broadcasting.
   public static func += (lhs: inout NDArray, rhs: NDArray) {
     lhs = lhs.add(rhs)
   }
 
+  /// Subtract `rhs` from `lhs` in place, with broadcasting.
   public static func -= (lhs: inout NDArray, rhs: NDArray) {
     lhs = lhs.subtract(rhs)
   }
 
+  /// Multiply `lhs` by `rhs` in place, with broadcasting.
   public static func *= (lhs: inout NDArray, rhs: NDArray) {
     lhs = lhs.multiply(rhs)
   }
 
+  /// Divide `lhs` by `rhs` in place, with broadcasting.
   public static func /= (lhs: inout NDArray, rhs: NDArray) {
     lhs = lhs.divide(rhs)
   }
 
+  /// Add scalar `rhs` to every element of `lhs` in place.
   public static func += (lhs: inout NDArray, rhs: Double) {
     lhs = lhs.add(rhs)
   }
 
+  /// Subtract scalar `rhs` from every element of `lhs` in place.
   public static func -= (lhs: inout NDArray, rhs: Double) {
     lhs = lhs.subtract(rhs)
   }
 
+  /// Multiply every element of `lhs` by scalar `rhs` in place.
   public static func *= (lhs: inout NDArray, rhs: Double) {
     lhs = lhs.multiply(rhs)
   }
 
+  /// Divide every element of `lhs` by scalar `rhs` in place.
   public static func /= (lhs: inout NDArray, rhs: Double) {
     lhs = lhs.divide(rhs)
   }
