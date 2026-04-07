@@ -41,6 +41,41 @@ public enum ArrayDType: String, CaseIterable, Sendable {
   }
 }
 
+// MARK: - Error Types
+
+/// Errors that can occur during NDArray operations
+public enum NDArrayError: Error, CustomStringConvertible {
+  /// Shape product does not match data element count
+  case invalidShape(shape: [Int], dataCount: Int)
+  /// Axis value is out of valid range for the array's dimensions
+  case invalidAxis(axis: Int, ndim: Int)
+  /// Shapes are incompatible for the requested operation
+  case shapeMismatch(operation: String, shapes: [[Int]])
+  /// Shapes cannot be broadcast together
+  case broadcastFailure(shapes: [[Int]])
+  /// Data type is not supported for the requested operation
+  case unsupportedDtype(operation: String, dtype: ArrayDType)
+  /// Array size is insufficient for the operation (e.g., ddof >= size)
+  case insufficientSize(operation: String, size: Int, requirement: String)
+
+  public var description: String {
+    switch self {
+    case .invalidShape(let shape, let dataCount):
+      return "Shape \(shape) requires \(shape.reduce(1, *)) elements but got \(dataCount)"
+    case .invalidAxis(let axis, let ndim):
+      return "Axis \(axis) is out of bounds for array with \(ndim) dimensions"
+    case .shapeMismatch(let operation, let shapes):
+      return "\(operation): incompatible shapes \(shapes)"
+    case .broadcastFailure(let shapes):
+      return "Cannot broadcast shapes \(shapes)"
+    case .unsupportedDtype(let operation, let dtype):
+      return "\(operation) does not support dtype \(dtype)"
+    case .insufficientSize(let operation, let size, let requirement):
+      return "\(operation): array size \(size) does not satisfy \(requirement)"
+    }
+  }
+}
+
 // MARK: - N-Dimensional Array Structure
 
 /// N-dimensional array representation with split storage for complex support
@@ -488,6 +523,36 @@ extension NDArray: CustomDebugStringConvertible {
   public var debugDescription: String {
     let dtype = isComplex ? ", dtype: complex128" : ", dtype: float64"
     return "NDArray(shape: \(shape)\(dtype), size: \(size), strides: \(strides))"
+  }
+}
+
+// MARK: - Axis Validation
+
+extension NDArray {
+  /// Normalize and validate an axis value, supporting negative indexing.
+  /// Returns the normalized (non-negative) axis index.
+  /// - Parameters:
+  ///   - axis: The axis to validate (may be negative for counting from end)
+  ///   - ndim: Number of dimensions to validate against (defaults to self.ndim)
+  /// - Returns: The normalized axis index in range [0, ndim)
+  public func normalizeAxis(_ axis: Int, ndim: Int? = nil) -> Int {
+    let dims = ndim ?? self.ndim
+    let normalized = axis < 0 ? axis + dims : axis
+    precondition(
+      normalized >= 0 && normalized < dims,
+      "Axis \(axis) is out of bounds for array with \(dims) dimensions"
+    )
+    return normalized
+  }
+
+  /// Static axis normalization for use in class methods.
+  internal static func normalizeAxis(_ axis: Int, ndim: Int) -> Int {
+    let normalized = axis < 0 ? axis + ndim : axis
+    precondition(
+      normalized >= 0 && normalized < ndim,
+      "Axis \(axis) is out of bounds for array with \(ndim) dimensions"
+    )
+    return normalized
   }
 }
 
