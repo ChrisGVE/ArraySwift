@@ -58,36 +58,71 @@ let result = matrix.dot(vector)
 - ``NDArray/eye(_:dtype:)``
 - ``NDArray/arange(start:stop:step:)``
 - ``NDArray/linspace(start:stop:num:endpoint:)``
+- ``NDArray/logspace(start:stop:num:base:)``
+- ``NDArray/geomspace(start:stop:num:)``
 - ``NDArray/random(_:)``
 - ``NDArray/randn(_:)``
+- ``NDArray/randint(low:high:shape:)``
+- ``NDArray/diag(_:k:)``
+- ``NDArray/meshgrid(x:y:indexing:)``
 
 ### Array Manipulation
 
 - ``NDArray/reshape(_:)``
 - ``NDArray/flatten()``
 - ``NDArray/transpose()``
+- ``NDArray/T``
+- ``NDArray/squeeze()``
+- ``NDArray/expandDims(axis:)``
+- ``NDArray/swapaxes(_:_:)``
+- ``NDArray/moveaxis(source:destination:)``
 - ``NDArray/concatenate(_:axis:)``
 - ``NDArray/stack(_:axis:)``
 - ``NDArray/split(indices:axis:)``
+- ``NDArray/tile(_:)``
+- ``NDArray/flip(axis:)``
+- ``NDArray/roll(shift:axis:)``
 
 ### Mathematical Functions
 
 - ``NDArray/sin()``
 - ``NDArray/cos()``
+- ``NDArray/tan()``
+- ``NDArray/arcsin()``
+- ``NDArray/arccos()``
+- ``NDArray/arctan()``
 - ``NDArray/exp()``
 - ``NDArray/log()``
+- ``NDArray/log2()``
+- ``NDArray/log10()``
+- ``NDArray/log1p()``
+- ``NDArray/expm1()``
 - ``NDArray/sqrt()``
 - ``NDArray/abs()``
-- ``NDArray/power(_:)-(Double)``
+- ``NDArray/sign()``
+- ``NDArray/conjugate()``
+- ``NDArray/realPart()``
+- ``NDArray/imagPart()``
 
 ### Reduction Operations
 
 - ``NDArray/sum(axis:)``
+- ``NDArray/sum(axis:keepdims:)``
 - ``NDArray/mean(axis:)``
+- ``NDArray/mean(axis:keepdims:)``
 - ``NDArray/min(axis:)``
 - ``NDArray/max(axis:)``
 - ``NDArray/std(axis:ddof:)``
 - ``NDArray/variance(axis:ddof:)``
+- ``NDArray/prod(axis:)``
+- ``NDArray/cumsum(axis:)``
+- ``NDArray/cumprod(axis:)``
+- ``NDArray/diff(n:axis:)``
+- ``NDArray/ptp(axis:)``
+- ``NDArray/argmin()``
+- ``NDArray/argmax()``
+- ``NDArray/median()``
+- ``NDArray/allclose(_:_:rtol:atol:)``
 
 ### Linear Algebra
 
@@ -100,8 +135,13 @@ let result = matrix.dot(vector)
 ### Comparison and Logic
 
 - ``NDArray/equal(_:)-(NDArray)``
+- ``NDArray/notEqual(_:)-(NDArray)``
 - ``NDArray/less(_:)-(NDArray)``
+- ``NDArray/lessEqual(_:)-(NDArray)``
 - ``NDArray/greater(_:)-(NDArray)``
+- ``NDArray/greaterEqual(_:)-(NDArray)``
 - ``NDArray/logicalAnd(_:)``
 - ``NDArray/logicalOr(_:)``
+- ``NDArray/logicalXor(_:)``
+- ``NDArray/logicalNot()``
 - ``NDArray/where(_:_:_:)``

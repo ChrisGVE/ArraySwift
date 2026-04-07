@@ -77,13 +77,13 @@ let magnitude = complex.abs()
 | Module | Purpose |
 |--------|---------|
 | `NDArray` | Core N-dimensional array type with shape, dtype, and data storage |
-| Creation | `zeros`, `ones`, `full`, `eye`, `arange`, `linspace`, `random`, `randn` |
-| Manipulation | `reshape`, `transpose`, `flatten`, `concatenate`, `stack`, `split`, `flip`, `roll` |
-| Math | `sin`, `cos`, `tan`, `exp`, `log`, `sqrt`, `abs`, `power`, `floor`, `ceil`, `round` |
-| Arithmetic | Element-wise `+`, `-`, `*`, `/`, broadcasting, compound assignment |
-| Reductions | `sum`, `mean`, `min`, `max`, `std`, `variance`, `prod`, `argmin`, `argmax` |
-| Linear Algebra | `dot`, `matmul`, `cross`, `inner`, `outer` |
-| Comparison | `equal`, `less`, `greater`, `where`, logical operations |
+| Creation | `zeros`, `ones`, `full`, `eye`, `arange`, `linspace`, `logspace`, `geomspace`, `random`, `randn`, `meshgrid` |
+| Manipulation | `reshape` (with -1 inference), `transpose`/`.T`, `flatten`, `concatenate`, `stack`, `split`, `flip`, `roll` |
+| Math | `sin`, `cos`, `tan`, `exp`, `log`, `log2`, `log10`, `sqrt`, `abs`, `power`, `arcsin`, `arccos`, `arctan` (all with complex support) |
+| Arithmetic | Element-wise `+`, `-`, `*`, `/`, broadcasting (real and complex), compound assignment |
+| Reductions | `sum`, `mean`, `min`, `max`, `std`, `variance`, `prod`, `cumsum`, `cumprod`, `diff` (with `axis` and `keepdims`) |
+| Linear Algebra | `dot`, `matmul`, `cross`, `inner`, `outer` (with complex support) |
+| Comparison | `equal`, `less`, `greater`, `where`, logical operations, `allclose` (all complex-aware) |
 
 ## Data Types
 
@@ -117,8 +117,8 @@ let linear = NDArray.linspace(start: 0, stop: 1, num: 5)
 
 ```swift
 let arr = NDArray.arange(start: 0, stop: 12)
-let matrix = arr.reshape([3, 4])
-let transposed = matrix.T
+let matrix = arr.reshape([3, -1])  // Infer columns: [3, 4]
+let transposed = matrix.T          // Transpose shorthand
 let flat = matrix.flatten()
 ```
 
@@ -128,11 +128,16 @@ let flat = matrix.flatten()
 let arr = NDArray([[1.0, 2.0, 3.0],
                    [4.0, 5.0, 6.0]])
 
-arr.sum()        // 21.0
-arr.sum(axis: 0) // [5, 7, 9]
-arr.sum(axis: 1) // [6, 15]
-arr.mean()       // 3.5
-arr.std()        // Standard deviation
+arr.sum()                            // 21.0
+arr.sum(axis: 0)                     // [5, 7, 9]
+arr.sum(axis: 1, keepdims: true)     // [[6], [15]] (shape [2,1])
+arr.mean(axis: -1)                   // Negative axis: [2, 5]
+arr.cumsum(axis: 1)                  // Cumulative sum along columns
+
+// Tolerance comparison
+let a = NDArray([1.0, 2.0, 3.0])
+let b = NDArray([1.0, 2.0, 3.0 + 1e-9])
+NDArray.allclose(a, b)               // true
 ```
 
 ### Linear Algebra
@@ -163,10 +168,26 @@ let complex = NDArray.complexArray(
     imag: [4.0, 5.0, 6.0]
 )
 
-complex.dtype       // .complex128
-complex.conjugate() // Complex conjugate
-complex.abs()       // Magnitude
-complex.angle()     // Phase angle
+complex.dtype         // .complex128
+complex.conjugate()   // Complex conjugate
+complex.abs()         // Magnitude
+complex.angle()       // Phase angle
+complex.realPart()    // Extract real components
+complex.imagPart()    // Extract imaginary components
+
+// Complex broadcasting works
+let scalar = NDArray.complexArray(shape: [1], real: [2], imag: [0])
+let scaled = complex * scalar  // Element-wise with broadcasting
+
+// Complex math functions
+complex.sin()         // Complex sine
+complex.log2()        // Complex log base 2
+complex.arcsin()      // Complex inverse sine
+
+// Complex comparisons check both parts
+let a = NDArray.complexArray(shape: [2], real: [1, 2], imag: [3, 4])
+let b = NDArray.complexArray(shape: [2], real: [1, 2], imag: [3, 0])
+a.equal(b)            // [1.0, 0.0] — second element differs in imag
 ```
 
 ## Requirements
