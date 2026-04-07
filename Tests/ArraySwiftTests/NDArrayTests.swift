@@ -1472,4 +1472,87 @@ final class NDArrayTests: XCTestCase {
         XCTAssertTrue(a.isNonZero(at: 1))   // 0+1i
         XCTAssertTrue(a.isNonZero(at: 2))   // 1+0i
     }
+
+    // MARK: - NumPy Cross-Validation
+
+    // np.sum([[1,2,3],[4,5,6]], axis=0) == [5, 7, 9]
+    func testNumpyCrossValidationSumAxis0() {
+        let a = NDArray([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]])
+        let result = a.sum(axis: 0)
+        XCTAssertEqual(result.shape, [3])
+        XCTAssertEqual(result.real[0], 5.0, accuracy: 1e-10)
+        XCTAssertEqual(result.real[1], 7.0, accuracy: 1e-10)
+        XCTAssertEqual(result.real[2], 9.0, accuracy: 1e-10)
+    }
+
+    // np.mean([[1,2,3],[4,5,6]], axis=1) == [2.0, 5.0]
+    func testNumpyCrossValidationMeanAxis1() {
+        let a = NDArray([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]])
+        let result = a.mean(axis: 1)
+        XCTAssertEqual(result.shape, [2])
+        XCTAssertEqual(result.real[0], 2.0, accuracy: 1e-10)
+        XCTAssertEqual(result.real[1], 5.0, accuracy: 1e-10)
+    }
+
+    // np.var([1,2,3,4,5], ddof=1) == 2.5
+    func testNumpyCrossValidationVarianceDdof1() {
+        let a = NDArray([1.0, 2.0, 3.0, 4.0, 5.0])
+        let result = a.variance(ddof: 1)
+        XCTAssertEqual(result, 2.5, accuracy: 1e-10)
+    }
+
+    // np.std([1,2,3,4,5]) == sqrt(2) ~= 1.4142135623730951
+    func testNumpyCrossValidationStd() {
+        let a = NDArray([1.0, 2.0, 3.0, 4.0, 5.0])
+        let result = a.std()
+        XCTAssertEqual(result, Darwin.sqrt(2.0), accuracy: 1e-10)
+    }
+
+    // np.dot([1,2,3],[4,5,6]) == 32
+    func testNumpyCrossValidationDot() {
+        let a = NDArray([1.0, 2.0, 3.0])
+        let b = NDArray([4.0, 5.0, 6.0])
+        let result = a.dot(b)
+        XCTAssertEqual(result.real[0], 32.0, accuracy: 1e-10)
+    }
+
+    // np.exp([0, 1]) == [1.0, e]
+    func testNumpyCrossValidationExp() {
+        let a = NDArray([0.0, 1.0])
+        let result = a.exp()
+        XCTAssertEqual(result.real[0], 1.0, accuracy: 1e-10)
+        XCTAssertEqual(result.real[1], Darwin.exp(1.0), accuracy: 1e-10)
+    }
+
+    // np.log([1, e]) == [0.0, 1.0]
+    func testNumpyCrossValidationLog() {
+        let a = NDArray([1.0, Darwin.exp(1.0)])
+        let result = a.log()
+        XCTAssertEqual(result.real[0], 0.0, accuracy: 1e-10)
+        XCTAssertEqual(result.real[1], 1.0, accuracy: 1e-10)
+    }
+
+    // np.sin([0, pi/2]) == [0.0, 1.0]
+    func testNumpyCrossValidationSin() {
+        let a = NDArray([0.0, Double.pi / 2])
+        let result = a.sin()
+        XCTAssertEqual(result.real[0], 0.0, accuracy: 1e-10)
+        XCTAssertEqual(result.real[1], 1.0, accuracy: 1e-10)
+    }
+
+    // np.reshape(np.arange(6), (2,3)) produces a 2x3 array with values 0..5
+    func testNumpyCrossValidationReshapeArange() {
+        let flat = NDArray.arange(start: 0, stop: 6, step: 1)
+        let matrix = flat.reshape([2, 3])
+        XCTAssertEqual(matrix.shape, [2, 3])
+        XCTAssertEqual(matrix.real, [0, 1, 2, 3, 4, 5])
+    }
+
+    // np.sum([1+2j, 3+4j]) == 4+6j
+    func testNumpyCrossValidationComplexSum() {
+        let a = NDArray.complexArray(shape: [2], real: [1.0, 3.0], imag: [2.0, 4.0])
+        let result = a.complexSum()
+        XCTAssertEqual(result.real, 4.0, accuracy: 1e-10)
+        XCTAssertEqual(result.imag, 6.0, accuracy: 1e-10)
+    }
 }
