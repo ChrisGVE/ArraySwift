@@ -172,15 +172,25 @@ extension NDArray {
       // Create diagonal matrix from 1D array
       let n = values.size + Swift.abs(k)
       var data = [Double](repeating: 0, count: n * n)
+      var imagData: [Double]? =
+        values.isComplex
+        ? [Double](repeating: 0, count: n * n) : nil
 
       for i in 0..<values.size {
         let row = k >= 0 ? i : i - k
         let col = k >= 0 ? i + k : i
         if row < n && col < n {
           data[row * n + col] = values.real[i]
+          if values.isComplex, let imagPart = values.imag {
+            imagData![row * n + col] = imagPart[i]
+          }
         }
       }
 
+      if values.isComplex {
+        return NDArray(
+          shape: [n, n], dtype: .complex128, real: data, imag: imagData)
+      }
       return NDArray(shape: [n, n], data: data)
     } else if values.ndim == 2 {
       // Extract diagonal from 2D matrix
@@ -188,6 +198,7 @@ extension NDArray {
       let cols = values.shape[1]
 
       var diagValues: [Double] = []
+      var diagImag: [Double]? = values.isComplex ? [] : nil
       let startRow = k >= 0 ? 0 : -k
       let startCol = k >= 0 ? k : 0
 
@@ -195,10 +206,18 @@ extension NDArray {
       var col = startCol
       while row < rows && col < cols {
         diagValues.append(values.real[row * cols + col])
+        if values.isComplex, let imagPart = values.imag {
+          diagImag!.append(imagPart[row * cols + col])
+        }
         row += 1
         col += 1
       }
 
+      if values.isComplex {
+        return NDArray(
+          shape: [diagValues.count], dtype: .complex128, real: diagValues,
+          imag: diagImag)
+      }
       return NDArray(shape: [diagValues.count], data: diagValues)
     }
 
@@ -304,14 +323,45 @@ extension NDArray {
   // MARK: - Meshgrid
 
   /// Create coordinate matrices from coordinate vectors.
+  ///
+  /// Mirrors NumPy's `meshgrid` with support for both Cartesian (`"xy"`) and
+  /// matrix (`"ij"`) index conventions.
+  ///
   /// - Parameters:
-  ///   - x: 1D array of x coordinates
-  ///   - y: 1D array of y coordinates
-  /// - Returns: Tuple of (X, Y) meshgrid arrays
-  public static func meshgrid(x: NDArray, y: NDArray) -> (NDArray, NDArray) {
+  ///   - x: 1D array of x (or first) coordinates.
+  ///   - y: 1D array of y (or second) coordinates.
+  ///   - indexing: Index convention. `"xy"` (default) produces Cartesian output
+  ///     where X varies along columns and Y along rows, matching standard plot
+  ///     axes. `"ij"` produces matrix output where the first input varies along
+  ///     rows and the second along columns.
+  /// - Returns: Tuple of (X, Y) coordinate arrays with shape `[ny, nx]` for
+  ///   `"xy"` indexing or `[nx, ny]` for `"ij"` indexing.
+  public static func meshgrid(
+    x: NDArray,
+    y: NDArray,
+    indexing: String = "xy"
+  ) -> (NDArray, NDArray) {
     let nx = x.size
     let ny = y.size
 
+    if indexing == "ij" {
+      // Matrix indexing: first input (x) along rows, second (y) along columns.
+      // Output shape: [nx, ny]
+      var xData = [Double](repeating: 0, count: nx * ny)
+      var yData = [Double](repeating: 0, count: nx * ny)
+
+      for i in 0..<nx {
+        for j in 0..<ny {
+          xData[i * ny + j] = x.real[i]
+          yData[i * ny + j] = y.real[j]
+        }
+      }
+
+      return (NDArray(shape: [nx, ny], data: xData), NDArray(shape: [nx, ny], data: yData))
+    }
+
+    // Cartesian indexing (default "xy"): X varies along columns, Y along rows.
+    // Output shape: [ny, nx]
     var xData = [Double](repeating: 0, count: ny * nx)
     var yData = [Double](repeating: 0, count: ny * nx)
 
@@ -322,9 +372,7 @@ extension NDArray {
       }
     }
 
-    let X = NDArray(shape: [ny, nx], data: xData)
-    let Y = NDArray(shape: [ny, nx], data: yData)
-    return (X, Y)
+    return (NDArray(shape: [ny, nx], data: xData), NDArray(shape: [ny, nx], data: yData))
   }
 }
 
