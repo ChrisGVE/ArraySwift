@@ -31,9 +31,11 @@ extension NDArray {
   // MARK: - Element-wise Binary Operations
 
   /// Add two arrays element-wise.
+  /// Supports broadcasting and complex arrays.
   public func add(_ other: NDArray) -> NDArray {
     if isComplex || other.isComplex {
-      return complexAdd(self.promoteToComplex(), other.promoteToComplex())
+      let (a, b, _) = broadcast(self.promoteToComplex(), other.promoteToComplex())
+      return complexAdd(a, b)
     }
 
     let (a, b, resultShape) = broadcast(self, other)
@@ -43,9 +45,11 @@ extension NDArray {
   }
 
   /// Subtract two arrays element-wise.
+  /// Supports broadcasting and complex arrays.
   public func subtract(_ other: NDArray) -> NDArray {
     if isComplex || other.isComplex {
-      return complexSub(self.promoteToComplex(), other.promoteToComplex())
+      let (a, b, _) = broadcast(self.promoteToComplex(), other.promoteToComplex())
+      return complexSub(a, b)
     }
 
     let (a, b, resultShape) = broadcast(self, other)
@@ -56,9 +60,11 @@ extension NDArray {
   }
 
   /// Multiply two arrays element-wise.
+  /// Supports broadcasting and complex arrays.
   public func multiply(_ other: NDArray) -> NDArray {
     if isComplex || other.isComplex {
-      return complexMul(self.promoteToComplex(), other.promoteToComplex())
+      let (a, b, _) = broadcast(self.promoteToComplex(), other.promoteToComplex())
+      return complexMul(a, b)
     }
 
     let (a, b, resultShape) = broadcast(self, other)
@@ -68,9 +74,11 @@ extension NDArray {
   }
 
   /// Divide two arrays element-wise.
+  /// Supports broadcasting and complex arrays.
   public func divide(_ other: NDArray) -> NDArray {
     if isComplex || other.isComplex {
-      return complexDiv(self.promoteToComplex(), other.promoteToComplex())
+      let (a, b, _) = broadcast(self.promoteToComplex(), other.promoteToComplex())
+      return complexDiv(a, b)
     }
 
     let (a, b, resultShape) = broadcast(self, other)
@@ -613,6 +621,9 @@ private func broadcastTo(_ array: NDArray, shape: [Int]) -> NDArray {
   }
 
   // Fill result array
+  var resultImag: [Double]? = array.isComplex
+    ? [Double](repeating: 0, count: resultSize) : nil
+
   for i in 0..<resultSize {
     var sourceIdx = 0
     var remaining = i
@@ -622,8 +633,14 @@ private func broadcastTo(_ array: NDArray, shape: [Int]) -> NDArray {
       sourceIdx += (coord % paddedShape[d]) * sourceStrides[d]
     }
     result[i] = array.real[sourceIdx]
+    if array.isComplex, let imagPart = array.imag {
+      resultImag![i] = imagPart[sourceIdx]
+    }
   }
 
+  if array.isComplex {
+    return NDArray(shape: shape, dtype: .complex128, real: result, imag: resultImag)
+  }
   return NDArray(shape: shape, data: result)
 }
 
