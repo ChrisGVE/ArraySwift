@@ -177,99 +177,125 @@ extension NDArray {
   // MARK: - Dot Product
 
   /// Compute the dot product of two arrays.
-  /// - For 1-D arrays: inner product of vectors
-  /// - For 2-D arrays: matrix multiplication
+  /// - For 1-D arrays: inner product of vectors (complex-aware)
+  /// - For 2-D arrays: matrix multiplication (complex-aware)
   /// - For N-D arrays: sum product over last axis of a and second-to-last of b
   public func dot(_ other: NDArray) -> NDArray {
-    // 1D x 1D: inner product (returns scalar as 0-D array)
-    if ndim == 1 && other.ndim == 1 {
-      precondition(size == other.size, "Vectors must have same length for dot product")
+    let useComplex = isComplex || other.isComplex
+    let a = useComplex ? promoteToComplex() : self
+    let b = useComplex ? other.promoteToComplex() : other
+
+    // 1D x 1D: inner product
+    if a.ndim == 1 && b.ndim == 1 {
+      precondition(a.size == b.size, "Vectors must have same length for dot product")
+      if useComplex {
+        return complexDot1D(a, b)
+      }
       var result: Double = 0
-      vDSP_dotprD(real, 1, other.real, 1, &result, vDSP_Length(size))
+      vDSP_dotprD(a.real, 1, b.real, 1, &result, vDSP_Length(a.size))
       return NDArray(shape: [1], data: [result])
     }
 
     // 2D x 2D: matrix multiplication
-    if ndim == 2 && other.ndim == 2 {
-      return matmul(other)
+    if a.ndim == 2 && b.ndim == 2 {
+      return a.matmul(b)
     }
 
     // 2D x 1D: matrix-vector multiplication
-    if ndim == 2 && other.ndim == 1 {
-      precondition(shape[1] == other.size, "Inner dimensions must match")
-      return matvec(other)
+    if a.ndim == 2 && b.ndim == 1 {
+      precondition(a.shape[1] == b.size, "Inner dimensions must match")
+      return a.matvec(b)
     }
 
     // 1D x 2D: vector-matrix multiplication
-    if ndim == 1 && other.ndim == 2 {
-      precondition(size == other.shape[0], "Inner dimensions must match")
-      return vecmat(other)
+    if a.ndim == 1 && b.ndim == 2 {
+      precondition(a.size == b.shape[0], "Inner dimensions must match")
+      return a.vecmat(b)
     }
 
     // General N-D case
-    return generalDot(other)
+    return a.generalDot(b)
   }
 
-  /// Matrix multiplication (2D x 2D).
+  /// Matrix multiplication (2D x 2D). Supports complex arrays.
   public func matmul(_ other: NDArray) -> NDArray {
     precondition(ndim == 2 && other.ndim == 2, "Both arrays must be 2D for matmul")
     precondition(
       shape[1] == other.shape[0], "Inner dimensions must match: \(shape[1]) != \(other.shape[0])")
 
-    let m = shape[0]  // rows of A
-    let k = shape[1]  // cols of A = rows of B
-    let n = other.shape[1]  // cols of B
+    let m = shape[0]
+    let k = shape[1]
+    let n = other.shape[1]
+
+    if isComplex || other.isComplex {
+      let a = promoteToComplex()
+      let b = other.promoteToComplex()
+      return complexMatmul(a, b, m: m, k: k, n: n)
+    }
 
     var result = [Double](repeating: 0, count: m * n)
-
-    // Use vDSP for matrix multiply: C = A * B
-    // vDSP_mmulD computes C = A * B where:
-    // A is m x k, B is k x n, C is m x n
-    vDSP_mmulD(
-      real, 1,
-      other.real, 1,
-      &result, 1,
-      vDSP_Length(m),
-      vDSP_Length(n),
-      vDSP_Length(k)
-    )
-
+    vDSP_mmulD(real, 1, other.real, 1, &result, 1,
+               vDSP_Length(m), vDSP_Length(n), vDSP_Length(k))
     return NDArray(shape: [m, n], data: result)
   }
 
-  /// Matrix-vector multiplication (2D x 1D).
+  /// Matrix-vector multiplication (2D x 1D). Supports complex arrays.
   private func matvec(_ vec: NDArray) -> NDArray {
     let m = shape[0]
     let n = shape[1]
 
-    var result = [Double](repeating: 0, count: m)
-
-    for i in 0..<m {
-      var dot: Double = 0
-      for j in 0..<n {
-        dot += real[i * n + j] * vec.real[j]
+    if isComplex || vec.isComplex {
+      let matImag = imag ?? [Double](repeating: 0, count: size)
+      let vecImag = vec.imag ?? [Double](repeating: 0, count: vec.size)
+      var resultReal = [Double](repeating: 0, count: m)
+      var resultImag = [Double](repeating: 0, count: m)
+      for i in 0..<m {
+        for j in 0..<n {
+          let ar = real[i * n + j], ai = matImag[i * n + j]
+          let br = vec.real[j], bi = vecImag[j]
+          resultReal[i] += ar * br - ai * bi
+          resultImag[i] += ar * bi + ai * br
+        }
       }
-      result[i] = dot
+      return NDArray.complexArray(shape: [m], real: resultReal, imag: resultImag)
     }
 
+    var result = [Double](repeating: 0, count: m)
+    for i in 0..<m {
+      for j in 0..<n {
+        result[i] += real[i * n + j] * vec.real[j]
+      }
+    }
     return NDArray(shape: [m], data: result)
   }
 
-  /// Vector-matrix multiplication (1D x 2D).
+  /// Vector-matrix multiplication (1D x 2D). Supports complex arrays.
   private func vecmat(_ mat: NDArray) -> NDArray {
     let m = mat.shape[0]
     let n = mat.shape[1]
 
-    var result = [Double](repeating: 0, count: n)
-
-    for j in 0..<n {
-      var dot: Double = 0
-      for i in 0..<m {
-        dot += real[i] * mat.real[i * n + j]
+    if isComplex || mat.isComplex {
+      let vecImag = imag ?? [Double](repeating: 0, count: size)
+      let matImag = mat.imag ?? [Double](repeating: 0, count: mat.size)
+      var resultReal = [Double](repeating: 0, count: n)
+      var resultImag = [Double](repeating: 0, count: n)
+      for j in 0..<n {
+        for i in 0..<m {
+          let ar = real[i], ai = vecImag[i]
+          let br = mat.real[i * n + j], bi = matImag[i * n + j]
+          resultReal[j] += ar * br - ai * bi
+          resultImag[j] += ar * bi + ai * br
+        }
       }
-      result[j] = dot
+      return NDArray.complexArray(shape: [n], real: resultReal, imag: resultImag)
     }
 
+    var result = [Double](repeating: 0, count: n)
+    for j in 0..<n {
+      for i in 0..<m {
+        result[j] += real[i] * mat.real[i * n + j]
+      }
+    }
     return NDArray(shape: [n], data: result)
   }
 
@@ -420,6 +446,59 @@ extension NDArray {
 
     return NDArray(shape: [flat.size, otherFlat.size], data: result)
   }
+}
+
+// MARK: - Complex Dot / Matmul Helpers
+
+/// 1-D complex inner product: sum(a_r*b_r - a_i*b_i) + i*sum(a_r*b_i + a_i*b_r).
+private func complexDot1D(_ a: NDArray, _ b: NDArray) -> NDArray {
+  let n = a.size
+  let aImag = a.imag!
+  let bImag = b.imag!
+  var sumR = 0.0, sumI = 0.0
+  for idx in 0..<n {
+    sumR += a.real[idx] * b.real[idx] - aImag[idx] * bImag[idx]
+    sumI += a.real[idx] * bImag[idx] + aImag[idx] * b.real[idx]
+  }
+  return NDArray.complexArray(shape: [1], real: [sumR], imag: [sumI])
+}
+
+/// 2-D complex matrix multiply using vDSP_zmmulD.
+/// A is m×k, B is k×n, result C is m×n.
+private func complexMatmul(_ a: NDArray, _ b: NDArray, m: Int, k: Int, n: Int) -> NDArray {
+  var resultReal = [Double](repeating: 0, count: m * n)
+  var resultImag = [Double](repeating: 0, count: m * n)
+
+  a.real.withUnsafeBufferPointer { aRealBuf in
+    a.imag!.withUnsafeBufferPointer { aImagBuf in
+      b.real.withUnsafeBufferPointer { bRealBuf in
+        b.imag!.withUnsafeBufferPointer { bImagBuf in
+          resultReal.withUnsafeMutableBufferPointer { resRealBuf in
+            resultImag.withUnsafeMutableBufferPointer { resImagBuf in
+              var splitA = DSPDoubleSplitComplex(
+                realp: UnsafeMutablePointer(mutating: aRealBuf.baseAddress!),
+                imagp: UnsafeMutablePointer(mutating: aImagBuf.baseAddress!)
+              )
+              var splitB = DSPDoubleSplitComplex(
+                realp: UnsafeMutablePointer(mutating: bRealBuf.baseAddress!),
+                imagp: UnsafeMutablePointer(mutating: bImagBuf.baseAddress!)
+              )
+              var splitC = DSPDoubleSplitComplex(
+                realp: resRealBuf.baseAddress!,
+                imagp: resImagBuf.baseAddress!
+              )
+              vDSP_zmmulD(
+                &splitA, 1, &splitB, 1, &splitC, 1,
+                vDSP_Length(m), vDSP_Length(n), vDSP_Length(k)
+              )
+            }
+          }
+        }
+      }
+    }
+  }
+
+  return NDArray.complexArray(shape: [m, n], real: resultReal, imag: resultImag)
 }
 
 // MARK: - Complex Arithmetic Helpers
