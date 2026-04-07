@@ -377,6 +377,148 @@ extension NDArray {
     return NDArray(shape: [size], data: result)
   }
 
+
+  /// Cumulative sum along an axis, preserving the input shape.
+  ///
+  /// Each element along `axis` is replaced by the running sum up to that position.
+  /// For complex arrays both real and imaginary parts are accumulated independently.
+  ///
+  /// - Parameter axis: Axis along which to accumulate (supports negative indexing).
+  /// - Returns: Array with the same shape as `self`.
+  public func cumsum(axis: Int) -> NDArray {
+    let ax = normalizeAxis(axis)
+    let axisStride = strides[ax]
+    let axisLen = shape[ax]
+
+    var resultReal = real
+    var resultImag = imag
+
+    // Prefix-scan: for step k, add element at (k-1) into element at k.
+    for k in 1..<axisLen {
+      for i in 0..<size {
+        guard (i / axisStride) % axisLen == k else { continue }
+        let prev = i - axisStride
+        resultReal[i] += resultReal[prev]
+        if resultImag != nil { resultImag![i] += resultImag![prev] }
+      }
+    }
+
+    if isComplex, let ri = resultImag {
+      return NDArray(shape: shape, dtype: .complex128, real: resultReal, imag: ri)
+    }
+    return NDArray(shape: shape, data: resultReal)
+  }
+
+  /// Cumulative product along an axis, preserving the input shape.
+  ///
+  /// Each element along `axis` is replaced by the running product up to that position.
+  /// For complex arrays the full complex multiplication rule is applied at each step.
+  ///
+  /// - Parameter axis: Axis along which to accumulate (supports negative indexing).
+  /// - Returns: Array with the same shape as `self`.
+  public func cumprod(axis: Int) -> NDArray {
+    let ax = normalizeAxis(axis)
+    let axisStride = strides[ax]
+    let axisLen = shape[ax]
+
+    var resultReal = real
+    var resultImag = imag
+
+    for k in 1..<axisLen {
+      for i in 0..<size {
+        guard (i / axisStride) % axisLen == k else { continue }
+        let prev = i - axisStride
+        if isComplex, resultImag != nil {
+          // (a + bi)(c + di) = (ac - bd) + (ad + bc)i
+          let a = resultReal[prev], b = resultImag![prev]
+          let c = resultReal[i], d = resultImag![i]
+          resultReal[i] = a * c - b * d
+          resultImag![i] = a * d + b * c
+        } else {
+          resultReal[i] *= resultReal[prev]
+        }
+      }
+    }
+
+    if isComplex, let ri = resultImag {
+      return NDArray(shape: shape, dtype: .complex128, real: resultReal, imag: ri)
+    }
+    return NDArray(shape: shape, data: resultReal)
+  }
+
+  /// Differences along an axis.
+  ///
+  /// Computes `n`-th order differences along `axis`. The output shape is the same as
+  /// the input except the `axis` dimension is reduced by `n`.
+  ///
+  /// - Parameters:
+  ///   - n: Order of differences (default 1).
+  ///   - axis: Axis along which to compute differences (supports negative indexing).
+  /// - Returns: Array whose `axis` dimension is `shape[axis] - n`.
+  public func diff(n: Int = 1, axis: Int) -> NDArray {
+    let ax = normalizeAxis(axis)
+    guard shape[ax] > n else {
+      var zeroShape = shape
+      zeroShape[ax] = 0
+      if isComplex {
+        return NDArray(shape: zeroShape, dtype: .complex128, real: [], imag: [])
+      }
+      return NDArray(shape: zeroShape, data: [])
+    }
+
+    var currentShape = shape
+    var currentReal = real
+    var currentImag = imag
+
+    for _ in 0..<n {
+      let curAxisLen = currentShape[ax]
+      var newShape = currentShape
+      newShape[ax] = curAxisLen - 1
+      let newSize = newShape.reduce(1, *)
+
+      var curStrides = [Int](repeating: 1, count: currentShape.count)
+      for d in stride(from: currentShape.count - 2, through: 0, by: -1) {
+        curStrides[d] = curStrides[d + 1] * currentShape[d + 1]
+      }
+      var newStrides = [Int](repeating: 1, count: newShape.count)
+      for d in stride(from: newShape.count - 2, through: 0, by: -1) {
+        newStrides[d] = newStrides[d + 1] * newShape[d + 1]
+      }
+
+      var newReal = [Double](repeating: 0, count: newSize)
+      var newImag: [Double]? = currentImag != nil ? [Double](repeating: 0, count: newSize) : nil
+
+      for outIdx in 0..<newSize {
+        // Decode multi-dim coordinates of the output index.
+        var coords = [Int](repeating: 0, count: newShape.count)
+        var rem = outIdx
+        for d in 0..<newShape.count {
+          coords[d] = rem / newStrides[d]
+          rem %= newStrides[d]
+        }
+        // Map to two consecutive source flat indices along ax.
+        var srcIdx0 = 0, srcIdx1 = 0
+        for d in 0..<currentShape.count {
+          srcIdx0 += coords[d] * curStrides[d]
+          srcIdx1 += (d == ax ? coords[d] + 1 : coords[d]) * curStrides[d]
+        }
+        newReal[outIdx] = currentReal[srcIdx1] - currentReal[srcIdx0]
+        if newImag != nil, let ci = currentImag {
+          newImag![outIdx] = ci[srcIdx1] - ci[srcIdx0]
+        }
+      }
+
+      currentShape = newShape
+      currentReal = newReal
+      currentImag = newImag
+    }
+
+    if isComplex, let ri = currentImag {
+      return NDArray(shape: currentShape, dtype: .complex128, real: currentReal, imag: ri)
+    }
+    return NDArray(shape: currentShape, data: currentReal)
+  }
+
   /// Differences between consecutive elements.
   public func diff(n: Int = 1) -> NDArray {
     guard size > n else {
@@ -726,11 +868,20 @@ public func argmax(_ array: NDArray) -> Int { array.argmax() }
 /// Cumulative sum.
 public func cumsum(_ array: NDArray) -> NDArray { array.cumsum() }
 
+/// Cumulative sum along an axis.
+public func cumsum(_ array: NDArray, axis: Int) -> NDArray { array.cumsum(axis: axis) }
+
 /// Cumulative product.
 public func cumprod(_ array: NDArray) -> NDArray { array.cumprod() }
 
+/// Cumulative product along an axis.
+public func cumprod(_ array: NDArray, axis: Int) -> NDArray { array.cumprod(axis: axis) }
+
 /// Differences between consecutive elements.
 public func diff(_ array: NDArray, n: Int = 1) -> NDArray { array.diff(n: n) }
+
+/// Differences along an axis.
+public func diff(_ array: NDArray, n: Int = 1, axis: Int) -> NDArray { array.diff(n: n, axis: axis) }
 
 /// True if all elements are non-zero.
 public func all(_ array: NDArray) -> Bool { array.all() }
