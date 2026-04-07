@@ -15,15 +15,33 @@ extension NDArray {
   // MARK: - Reshape
 
   /// Reshape the array to a new shape.
-  /// - Parameter newShape: New shape (total size must match)
+  /// One dimension may be -1, in which case it is inferred from the total size.
+  /// - Parameter newShape: New shape (total size must match, at most one -1 allowed)
   public func reshape(_ newShape: [Int]) -> NDArray {
-    let newSize = newShape.reduce(1, *)
-    precondition(newSize == size, "Cannot reshape array of size \(size) to shape \(newShape)")
+    var resolvedShape = newShape
+    let inferIdx = newShape.firstIndex(of: -1)
+
+    if let idx = inferIdx {
+      precondition(
+        newShape.filter({ $0 == -1 }).count == 1,
+        "Only one dimension can be -1 in reshape"
+      )
+      let knownProduct = newShape.enumerated()
+        .filter({ $0.offset != idx })
+        .map({ $0.element })
+        .reduce(1, *)
+      precondition(knownProduct > 0 && size % knownProduct == 0,
+        "Cannot infer dimension: size \(size) is not divisible by \(knownProduct)")
+      resolvedShape[idx] = size / knownProduct
+    }
+
+    let newSize = resolvedShape.reduce(1, *)
+    precondition(newSize == size, "Cannot reshape array of size \(size) to shape \(resolvedShape)")
 
     if isComplex {
-      return NDArray(shape: newShape, dtype: .complex128, real: real, imag: imag)
+      return NDArray(shape: resolvedShape, dtype: .complex128, real: real, imag: imag)
     }
-    return NDArray(shape: newShape, data: real)
+    return NDArray(shape: resolvedShape, data: real)
   }
 
   /// Flatten the array to 1D.
