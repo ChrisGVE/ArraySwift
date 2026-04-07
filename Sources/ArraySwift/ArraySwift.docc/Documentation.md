@@ -40,7 +40,15 @@ let result = matrix.dot(vector)
 
 - ``NDArray``
 - ``ArrayDType``
+- ``NDArrayError``
 - <doc:GettingStarted>
+
+### Guides
+
+- <doc:NumPyCompatibility>
+- <doc:PlatformSupport>
+- <doc:ThreadSafety>
+- <doc:APIStability>
 
 ### Array Creation
 
