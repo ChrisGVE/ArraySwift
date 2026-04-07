@@ -291,7 +291,12 @@ extension NDArray {
     Darwin.sqrt(variance(ddof: ddof))
   }
 
-  /// Standard deviation along an axis.
+  /// Standard deviation along `axis`. Equivalent to NumPy's `numpy.std(axis:ddof:)`.
+  ///
+  /// - Parameters:
+  ///   - axis: Axis to reduce.
+  ///   - ddof: Delta degrees of freedom (default `0` for population std).
+  /// - Returns: An `NDArray` of standard deviations with the specified axis removed.
   public func std(axis: Int, ddof: Int = 0) -> NDArray {
     let v = variance(axis: axis, ddof: ddof)
     return v.sqrt()
@@ -299,14 +304,17 @@ extension NDArray {
 
   // MARK: - Min and Max
 
-  /// Minimum value.
+  /// Minimum value across all elements. Equivalent to NumPy's `numpy.min`.
+  /// - Returns: The smallest real element value.
   public func min() -> Double {
     var result: Double = 0
     vDSP_minvD(real, 1, &result, vDSP_Length(size))
     return result
   }
 
-  /// Minimum along an axis.
+  /// Minimum along `axis`. Equivalent to NumPy's `numpy.min(axis:)`.
+  /// - Parameter axis: Axis to reduce. Supports negative indexing.
+  /// - Returns: An `NDArray` with the specified axis removed.
   public func min(axis: Int) -> NDArray {
     reduceAlongAxis(axis: axis) { base, axisStride, count in
       var result = real[base]
@@ -318,14 +326,17 @@ extension NDArray {
     }
   }
 
-  /// Maximum value.
+  /// Maximum value across all elements. Equivalent to NumPy's `numpy.max`.
+  /// - Returns: The largest real element value.
   public func max() -> Double {
     var result: Double = 0
     vDSP_maxvD(real, 1, &result, vDSP_Length(size))
     return result
   }
 
-  /// Maximum along an axis.
+  /// Maximum along `axis`. Equivalent to NumPy's `numpy.max(axis:)`.
+  /// - Parameter axis: Axis to reduce. Supports negative indexing.
+  /// - Returns: An `NDArray` with the specified axis removed.
   public func max(axis: Int) -> NDArray {
     reduceAlongAxis(axis: axis) { base, axisStride, count in
       var result = real[base]
@@ -337,7 +348,8 @@ extension NDArray {
     }
   }
 
-  /// Index of minimum value.
+  /// Flat index of the minimum value. Equivalent to NumPy's `numpy.argmin`.
+  /// - Returns: The zero-based flat index of the smallest element.
   public func argmin() -> Int {
     var result: Double = 0
     var idx: vDSP_Length = 0
@@ -345,7 +357,8 @@ extension NDArray {
     return Int(idx)
   }
 
-  /// Index of maximum value.
+  /// Flat index of the maximum value. Equivalent to NumPy's `numpy.argmax`.
+  /// - Returns: The zero-based flat index of the largest element.
   public func argmax() -> Int {
     var result: Double = 0
     var idx: vDSP_Length = 0
@@ -353,7 +366,8 @@ extension NDArray {
     return Int(idx)
   }
 
-  /// Peak-to-peak (max - min) value.
+  /// Peak-to-peak range (`max - min`) of all elements. Equivalent to NumPy's `numpy.ptp`.
+  /// - Returns: The difference between the largest and smallest real element values.
   public func ptp() -> Double {
     max() - min()
   }
@@ -411,7 +425,11 @@ extension NDArray {
 
   // MARK: - Cumulative Operations
 
-  /// Cumulative sum.
+  /// Cumulative sum of the flattened array. Equivalent to NumPy's `numpy.cumsum`.
+  ///
+  /// Supports complex arrays. Use ``cumsum(axis:)`` to preserve the original shape.
+  ///
+  /// - Returns: A 1-D `NDArray` of running sums.
   public func cumsum() -> NDArray {
     if isComplex, let imagPart = imag {
       var resultReal = [Double](repeating: 0, count: size)
@@ -436,7 +454,11 @@ extension NDArray {
     return NDArray(shape: [size], data: result)
   }
 
-  /// Cumulative product.
+  /// Cumulative product of the flattened array. Equivalent to NumPy's `numpy.cumprod`.
+  ///
+  /// Supports complex arrays. Use ``cumprod(axis:)`` to preserve the original shape.
+  ///
+  /// - Returns: A 1-D `NDArray` of running products.
   public func cumprod() -> NDArray {
     if isComplex, let imagPart = imag {
       var resultReal = [Double](repeating: 0, count: size)
@@ -610,7 +632,13 @@ extension NDArray {
     return NDArray(shape: currentShape, data: currentReal)
   }
 
-  /// Differences between consecutive elements.
+  /// N-th order differences between consecutive elements of the flattened array.
+  ///
+  /// Equivalent to NumPy's `numpy.diff` without an axis argument. For `n = 1` this
+  /// computes `a[1:] - a[:-1]`; for `n = 2` the operation is applied twice, etc.
+  ///
+  /// - Parameter n: Order of differences (default `1`).
+  /// - Returns: A 1-D `NDArray` of length `max(0, size - n)`.
   public func diff(n: Int = 1) -> NDArray {
     guard size > n else {
       if isComplex {
@@ -649,7 +677,8 @@ extension NDArray {
 
   // MARK: - Boolean Reductions
 
-  /// True if all elements are non-zero.
+  /// Test whether all elements are non-zero. Equivalent to NumPy's `numpy.all`.
+  /// - Returns: `true` if every element's real (and imaginary, for complex) part is non-zero.
   public func all() -> Bool {
     for i in 0..<size {
       if real[i] == 0 { return false }
@@ -657,7 +686,12 @@ extension NDArray {
     return true
   }
 
-  /// True if all elements along axis are non-zero.
+  /// Test whether all elements along `axis` are non-zero. Equivalent to NumPy's `numpy.all(axis:)`.
+  ///
+  /// Returns `1.0` where true and `0.0` where false.
+  ///
+  /// - Parameter axis: Axis to reduce.
+  /// - Returns: A real `NDArray` with the specified axis removed.
   public func all(axis: Int) -> NDArray {
     reduceAlongAxis(axis: axis) { base, axisStride, count in
       for i in 0..<count {
@@ -667,7 +701,8 @@ extension NDArray {
     }
   }
 
-  /// True if any element is non-zero.
+  /// Test whether any element is non-zero. Equivalent to NumPy's `numpy.any`.
+  /// - Returns: `true` if at least one element's real part is non-zero.
   public func any() -> Bool {
     for i in 0..<size {
       if real[i] != 0 { return true }
@@ -675,7 +710,12 @@ extension NDArray {
     return false
   }
 
-  /// True if any element along axis is non-zero.
+  /// Test whether any element along `axis` is non-zero. Equivalent to NumPy's `numpy.any(axis:)`.
+  ///
+  /// Returns `1.0` where true and `0.0` where false.
+  ///
+  /// - Parameter axis: Axis to reduce.
+  /// - Returns: A real `NDArray` with the specified axis removed.
   public func any(axis: Int) -> NDArray {
     reduceAlongAxis(axis: axis) { base, axisStride, count in
       for i in 0..<count {
@@ -728,7 +768,12 @@ extension NDArray {
 
   // MARK: - Statistics
 
-  /// Median value.
+  /// Median value of the real elements. Equivalent to NumPy's `numpy.median`.
+  ///
+  /// Sorts a copy of the real buffer; does not operate in-place. Returns `NaN` for
+  /// empty arrays and uses linear interpolation for even-sized arrays.
+  ///
+  /// - Returns: The median real value, or `NaN` if the array is empty.
   public func median() -> Double {
     let sorted = real.sorted()
     let n = sorted.count
@@ -740,8 +785,12 @@ extension NDArray {
     }
   }
 
-  /// Percentile value.
-  /// - Parameter q: Percentile (0-100)
+  /// Value at the given percentile using linear interpolation.
+  ///
+  /// Equivalent to NumPy's `numpy.percentile` with the default linear interpolation method.
+  ///
+  /// - Parameter q: Percentile in the range `[0, 100]`.
+  /// - Returns: The interpolated value at the `q`-th percentile, or `NaN` for empty arrays.
   public func percentile(_ q: Double) -> Double {
     guard size > 0 else { return .nan }
     let sorted = real.sorted()
@@ -752,8 +801,13 @@ extension NDArray {
     return sorted[lower] * (1 - frac) + sorted[upper] * frac
   }
 
-  /// Quantile value.
-  /// - Parameter q: Quantile (0-1)
+  /// Value at the given quantile using linear interpolation.
+  ///
+  /// Equivalent to NumPy's `numpy.quantile`. Delegates to ``percentile(_:)`` after
+  /// scaling `q` from `[0, 1]` to `[0, 100]`.
+  ///
+  /// - Parameter q: Quantile in the range `[0, 1]`.
+  /// - Returns: The interpolated value at the `q`-th quantile, or `NaN` for empty arrays.
   public func quantile(_ q: Double) -> Double {
     percentile(q * 100)
   }
@@ -1012,4 +1066,51 @@ public func allclose(
   atol: Double = 1e-8
 ) -> Bool {
   NDArray.allclose(a, b, rtol: rtol, atol: atol)
+}
+
+// MARK: - Keepdims Support
+
+extension NDArray {
+
+  private func withKeepdims(_ result: NDArray, axis: Int) -> NDArray {
+    let ax = normalizeAxis(axis)
+    var newShape = result.shape
+    newShape.insert(1, at: ax)
+    return result.reshape(newShape)
+  }
+
+  public func sum(axis: Int, keepdims: Bool) -> NDArray {
+    let result = sum(axis: axis)
+    return keepdims ? withKeepdims(result, axis: axis) : result
+  }
+
+  public func prod(axis: Int, keepdims: Bool) -> NDArray {
+    let result = prod(axis: axis)
+    return keepdims ? withKeepdims(result, axis: axis) : result
+  }
+
+  public func mean(axis: Int, keepdims: Bool) -> NDArray {
+    let result = mean(axis: axis)
+    return keepdims ? withKeepdims(result, axis: axis) : result
+  }
+
+  public func variance(axis: Int, ddof: Int = 0, keepdims: Bool) -> NDArray {
+    let result = variance(axis: axis, ddof: ddof)
+    return keepdims ? withKeepdims(result, axis: axis) : result
+  }
+
+  public func std(axis: Int, ddof: Int = 0, keepdims: Bool) -> NDArray {
+    let result = std(axis: axis, ddof: ddof)
+    return keepdims ? withKeepdims(result, axis: axis) : result
+  }
+
+  public func min(axis: Int, keepdims: Bool) -> NDArray {
+    let result = min(axis: axis)
+    return keepdims ? withKeepdims(result, axis: axis) : result
+  }
+
+  public func max(axis: Int, keepdims: Bool) -> NDArray {
+    let result = max(axis: axis)
+    return keepdims ? withKeepdims(result, axis: axis) : result
+  }
 }

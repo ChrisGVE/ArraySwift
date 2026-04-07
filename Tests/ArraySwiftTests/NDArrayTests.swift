@@ -1350,6 +1350,34 @@ final class NDArrayTests: XCTestCase {
         XCTAssertEqual(result.real[5], 15.0)
     }
 
+    // MARK: - Keepdims
+
+    func testSumKeepdims() {
+        let a = NDArray([[1, 2, 3], [4, 5, 6]])
+        let result = a.sum(axis: 0, keepdims: true)
+        XCTAssertEqual(result.shape, [1, 3])
+        XCTAssertEqual(result.real[0], 5.0, accuracy: 1e-10)
+    }
+
+    func testMeanKeepdims() {
+        let a = NDArray([[1, 2], [3, 4]])
+        let result = a.mean(axis: 1, keepdims: true)
+        XCTAssertEqual(result.shape, [2, 1])
+        XCTAssertEqual(result.real[0], 1.5, accuracy: 1e-10)
+    }
+
+    // MARK: - Diff with Axis
+
+    func testDiffAxis() {
+        let a = NDArray([[1, 2, 4], [3, 5, 9]])
+        let result = a.diff(n: 1, axis: 1)
+        XCTAssertEqual(result.shape, [2, 2])
+        XCTAssertEqual(result.real[0], 1.0) // 2-1
+        XCTAssertEqual(result.real[1], 2.0) // 4-2
+        XCTAssertEqual(result.real[2], 2.0) // 5-3
+        XCTAssertEqual(result.real[3], 4.0) // 9-5
+    }
+
     // MARK: - Variance/Std Stability
 
     func testVarianceDdofValidation() {
