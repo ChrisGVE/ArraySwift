@@ -1,6 +1,6 @@
 # ArraySwift
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg?style=flat)](https://opensource.org/licenses/MIT)
+[![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-yellow.svg?style=flat)](LICENSE)
 [![GitHub Release](https://img.shields.io/github/v/release/ChrisGVE/ArraySwift?style=flat&logo=github)](https://github.com/ChrisGVE/ArraySwift/releases)
 [![CI](https://github.com/ChrisGVE/ArraySwift/actions/workflows/ci.yml/badge.svg)](https://github.com/ChrisGVE/ArraySwift/actions/workflows/ci.yml)
 [![SPM Compatible](https://img.shields.io/badge/SPM-Compatible-brightgreen.svg?style=flat&logo=swift&logoColor=white)](https://swift.org/package-manager/)
@@ -75,7 +75,7 @@ let magnitude = complex.abs()
 ## Module Overview
 
 | Module | Purpose |
-|--------|---------|
+|--------|--------|
 | `NDArray` | Core N-dimensional array type with shape, dtype, and data storage |
 | Creation | `zeros`, `ones`, `full`, `eye`, `arange`, `linspace`, `logspace`, `geomspace`, `random`, `randn`, `meshgrid` |
 | Manipulation | `reshape` (with -1 inference), `transpose`/`.T`, `flatten`, `concatenate`, `stack`, `split`, `flip`, `roll` |
@@ -205,4 +205,4 @@ ArraySwift is part of a suite of Swift scientific computing libraries:
 
 ## License
 
-ArraySwift is available under the MIT License. See the [LICENSE](LICENSE) file for details.
+ArraySwift is available under the Apache License 2.0. See the [LICENSE](LICENSE) file for details.
