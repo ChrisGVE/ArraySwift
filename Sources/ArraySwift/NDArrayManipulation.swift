@@ -39,19 +39,13 @@ extension NDArray {
     let newSize = resolvedShape.reduce(1, *)
     precondition(newSize == size, "Cannot reshape array of size \(size) to shape \(resolvedShape)")
 
-    if isComplex {
-      return NDArray(shape: resolvedShape, dtype: .complex128, real: real, imag: imag)
-    }
-    return NDArray(shape: resolvedShape, data: real)
+    return NDArray(shape: resolvedShape, storage: storage)
   }
 
   /// Return a 1-D copy of the array. Equivalent to NumPy's `ndarray.flatten`.
   /// - Returns: A 1-D `NDArray` with elements in row-major (C) order.
   public func flatten() -> NDArray {
-    if isComplex {
-      return NDArray(shape: [size], dtype: .complex128, real: real, imag: imag)
-    }
-    return NDArray(shape: [size], data: real)
+    return NDArray(shape: [size], storage: storage)
   }
 
   /// Return a 1-D view (or copy) of the array. Alias for ``flatten()``.
@@ -70,7 +64,7 @@ extension NDArray {
   public func squeeze() -> NDArray {
     let newShape = shape.filter { $0 != 1 }
     if newShape.isEmpty {
-      return NDArray(shape: [1], data: real)
+      return NDArray(shape: [1], storage: storage)
     }
     return reshape(newShape)
   }
