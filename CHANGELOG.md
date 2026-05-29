@@ -7,6 +7,56 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.0] - Unreleased
+
+### Added
+
+#### Multi-Dtype Support
+- `ArrayDType` cases: `.int64` (signed 64-bit), `.bool` (UInt8 0/1), `.date` (TimeInterval)
+- `ArrayStorage` enum: type-safe backing union (`float64`, `int64`, `bool`, `complex128`, `date`)
+- Typed initializers: `NDArray(shape:int64Data:)`, `NDArray(shape:boolData:)`, `NDArray(shape:dates:)`, `NDArray(shape:dateIntervals:)`
+- Typed accessors: `.int64Data`, `.boolData`, `.dateIntervals` (return `nil` for wrong dtype)
+- Factory methods: `NDArray.boolArray(shape:values:)`, `NDArray.int64Array(shape:values:)`
+- `NDArrayError.dtypeMismatch(operation:lhs:rhs:)` for invalid dtype combinations
+
+#### NumPy Promotion Rules
+- `ArrayDType.promote(_:_:)`: bool < int64 < float64 < complex128 promotion table
+- `ArrayDType.promoteOrNil(_:_:)`: returns `nil` when date is involved
+- `ArrayDType.isInteger` property for bool and int64 dtypes
+- Binary arithmetic ops (`+`, `-`, `*`, `/`) automatically promote operands to common dtype
+
+#### Int64 Dtype
+- Exact integer arithmetic with wrapping overflow (`&+`, `&-`, `&*`) semantics
+- `NDArray.argmaxArray()` → scalar-shape int64 NDArray (array-returning argmax)
+- `NDArray.argminArray()` → scalar-shape int64 NDArray (array-returning argmin)
+- `NDArray.argsort()` → 1-D int64 NDArray of sort indices (stable sort)
+
+#### Bool Dtype
+- `logicalAnd`/`logicalOr`/`logicalXor`/`logicalNot` return `.bool` NDArray when both operands are `.bool`
+- `isnan()`, `isinf()`, `isfinite()`, `isposinf()`, `isneginf()` now return `.bool` NDArrays
+- `zeros(_:dtype:.bool)` and `ones(_:dtype:.bool)` factory support
+
+#### Date Dtype
+- `NDArray.addInterval(_:)` throws — adds `TimeInterval` seconds to each date element
+- `NDArray.subtractDates(_:)` throws — subtracts date arrays → float64 duration array
+- `NDArray.addArray(_:)` throws — enforces date cannot mix with other dtypes in arithmetic
+- Comparison ops (`equal`, `less`, etc.) work on date arrays via `real` accessor
+
+### Changed
+- `NDArray.dtype` is now a computed property derived from `ArrayStorage` (no stored `dtype` field)
+- `NDArray.real` and `NDArray.imag` are now computed-property shims over `ArrayStorage`
+  — existing float64 and complex128 code is fully backward compatible
+- `zeros(_:dtype:)` and `ones(_:dtype:)` extended to handle all five dtypes
+- `full(_:value:dtype:)` extended to handle all five dtypes
+- `broadcast()` and `broadcastTo()` visibility changed from `private` to `internal`
+- `reshape`, `flatten`, `squeeze` preserve original `ArrayStorage` (no silent float64 promotion)
+
+### Breaking Changes
+- `NDArray.dtype` can no longer be assigned directly — it derives from storage
+- `NDArray.real` setter for int64/bool arrays promotes storage to float64 (consistent with NumPy `astype` behavior)
+- Arrays constructed via `init(shape:dtype:real:imag:)` with `.int64` or `.bool` dtype still
+  store as float64 (use `init(shape:int64Data:)` / `init(shape:boolData:)` for typed storage)
+
 ### Added
 - `NDArrayError` enum with cases for common failure modes (invalid shape, axis, broadcast, dtype)
 - Centralized `normalizeAxis` helper supporting negative axis indexing across all APIs
