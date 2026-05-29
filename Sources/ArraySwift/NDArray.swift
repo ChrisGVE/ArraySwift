@@ -631,75 +631,8 @@ public struct NDArray: Sendable {
   }
 
   // MARK: - Subscript Operators
-
-  /// Access a real element by flat (linear) index.
-  ///
-  /// Returns the element value as `Double` regardless of underlying dtype.
-  /// For 1-D arrays this matches standard integer indexing.
-  ///
-  /// - Parameter index: Zero-based flat index.
-  public subscript(index: Int) -> Double {
-    get { real[index] }
-    set {
-      switch storage {
-      case .float64(var d):
-        d[index] = newValue
-        storage = .float64(d)
-      case .date(var d):
-        d[index] = newValue
-        storage = .date(d)
-      default:
-        // For int64/bool/complex, set via real accessor (promotes to float64)
-        var r = real
-        r[index] = newValue
-        storage = .float64(r)
-      }
-    }
-  }
-
-  /// Access a real element in a 2-D array by row and column indices.
-  /// - Parameters:
-  ///   - row: Zero-based row index.
-  ///   - col: Zero-based column index.
-  public subscript(row: Int, col: Int) -> Double {
-    get {
-      precondition(ndim == 2, "2D subscript requires 2D array")
-      return real[row * shape[1] + col]
-    }
-    set {
-      precondition(ndim == 2, "2D subscript requires 2D array")
-      self[row * shape[1] + col] = newValue
-    }
-  }
-
-  /// Access a real element in a 3-D array.
-  /// - Parameters:
-  ///   - d0: Index along the first dimension.
-  ///   - d1: Index along the second dimension.
-  ///   - d2: Index along the third dimension.
-  public subscript(d0: Int, d1: Int, d2: Int) -> Double {
-    get {
-      precondition(ndim == 3, "3D subscript requires 3D array")
-      return real[d0 * strides[0] + d1 * strides[1] + d2]
-    }
-    set {
-      precondition(ndim == 3, "3D subscript requires 3D array")
-      self[d0 * strides[0] + d1 * strides[1] + d2] = newValue
-    }
-  }
-
-  /// Access a real element using an array of N-dimensional indices.
-  /// - Parameter indices: One index per dimension; count must equal `ndim`.
-  public subscript(indices: [Int]) -> Double {
-    get {
-      precondition(indices.count == ndim, "Index count must match dimensions")
-      return real[flatIndex(indices)]
-    }
-    set {
-      precondition(indices.count == ndim, "Index count must match dimensions")
-      self[flatIndex(indices)] = newValue
-    }
-  }
+  // Note: integer element subscripts (single Int, [row,col], [d0,d1,d2], [Int])
+  // are defined in NDArrayIndexing.swift with full negative-index support.
 
   /// Extract a single row from a 2-D array as a 1-D array.
   ///
