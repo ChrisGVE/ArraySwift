@@ -11,6 +11,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+#### Advanced Indexing (`NDArrayIndexing.swift`)
+- `normalizeIndex(_:size:)`: public helper to convert negative indices (NumPy wrapping)
+- `subscript(_:)`, `subscript(_:_:)`, `subscript(_:_:_:)`, `subscript([Int])`: all
+  integer element subscripts now accept negative indices (wraps from end of axis)
+- `subscript(mask:)` → `NDArray`: boolean gather — selects elements where a `.bool`
+  NDArray is non-zero, returns a 1-D result preserving the source dtype
+- `maskSet(_:value:)` / `booleanSet(_:to:)`: boolean scatter setter for `Double` scalars
+- `booleanSetInt64(_:to:)`: boolean scatter for `.int64` arrays
+- `booleanIndex(_:)`: named-function form of the boolean-gather subscript
+- `subscript(indices:[Int])`: fancy (gather) indexing — collects elements at given flat
+  indices (negative indices supported, repeats allowed)
+- `subscript(ndIndices:NDArray)`: fancy indexing via a `.int64` NDArray index list
+
+#### Set Operations (`NDArraySetOps.swift`)
+- `NDArray.intersect1d(_:_:)`: sorted unique elements common to both arrays
+- `NDArray.union1d(_:_:)`: sorted unique elements from either array
+- `NDArray.setdiff1d(_:_:)`: sorted unique elements in `a` absent from `b`
+- `NDArray.setxor1d(_:_:)`: sorted unique elements in exactly one of the arrays
+- `NDArray.in1d(_:_:)`: membership test, returns `.bool` NDArray
+- All set operations support `.float64` and `.int64` dtypes
+
+#### FFT Family (`NDArrayFFT.swift`)
+- `NDArray.fft(_:)`: 1-D complex DFT (forward, unnormalised), complex128 in/out
+- `NDArray.ifft(_:)`: 1-D inverse DFT (normalised by 1/n)
+- `NDArray.rfft(_:)`: 1-D real→complex DFT, returns `n/2+1` non-redundant bins
+- `NDArray.fft2(_:)` / `NDArray.ifft2(_:)`: 2-D DFT via sequential row+column passes
+- `NDArray.fftn(_:)` / `NDArray.ifftn(_:)`: N-D DFT via repeated 1-D passes
+- `NDArray.fftfreq(_:d:)`: sample-frequency array for interpreting DFT output bins
+- Uses `vDSP_DFT_zop_CreateSetupD` for SIMD-accelerated O(N log N) at power-of-2
+  lengths; exact O(N²) direct DFT fallback for arbitrary lengths
+
 #### Multi-Dtype Support
 - `ArrayDType` cases: `.int64` (signed 64-bit), `.bool` (UInt8 0/1), `.date` (TimeInterval)
 - `ArrayStorage` enum: type-safe backing union (`float64`, `int64`, `bool`, `complex128`, `date`)
