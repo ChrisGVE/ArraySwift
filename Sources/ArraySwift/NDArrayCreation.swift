@@ -17,25 +17,47 @@ extension NDArray {
   /// Create an array filled with zeros. Equivalent to NumPy's `numpy.zeros`.
   /// - Parameters:
   ///   - shape: Shape of the output array.
-  ///   - dtype: Element type (default `.float64`). Pass `.complex128` for a complex array.
+  ///   - dtype: Element type (default `.float64`).
   /// - Returns: A new zero-filled `NDArray`.
   public static func zeros(_ shape: [Int], dtype: ArrayDType = .float64) -> NDArray {
-    let size = shape.reduce(1, *)
-    let real = [Double](repeating: 0, count: size)
-    let imag: [Double]? = dtype == .complex128 ? [Double](repeating: 0, count: size) : nil
-    return NDArray(shape: shape, dtype: dtype, real: real, imag: imag)
+    let count = shape.reduce(1, *)
+    switch dtype {
+    case .float64:
+      return NDArray(shape: shape, storage: .float64([Double](repeating: 0, count: count)))
+    case .int64:
+      return NDArray(shape: shape, storage: .int64([Int64](repeating: 0, count: count)))
+    case .bool:
+      return NDArray(shape: shape, storage: .bool([UInt8](repeating: 0, count: count)))
+    case .complex128:
+      return NDArray(shape: shape, storage: .complex128(
+        real: [Double](repeating: 0, count: count),
+        imag: [Double](repeating: 0, count: count)))
+    case .date:
+      return NDArray(shape: shape, storage: .date([Double](repeating: 0, count: count)))
+    }
   }
 
   /// Create an array filled with ones. Equivalent to NumPy's `numpy.ones`.
   /// - Parameters:
   ///   - shape: Shape of the output array.
-  ///   - dtype: Element type (default `.float64`). Pass `.complex128` for a complex array.
+  ///   - dtype: Element type (default `.float64`).
   /// - Returns: A new one-filled `NDArray`.
   public static func ones(_ shape: [Int], dtype: ArrayDType = .float64) -> NDArray {
-    let size = shape.reduce(1, *)
-    let real = [Double](repeating: 1, count: size)
-    let imag: [Double]? = dtype == .complex128 ? [Double](repeating: 0, count: size) : nil
-    return NDArray(shape: shape, dtype: dtype, real: real, imag: imag)
+    let count = shape.reduce(1, *)
+    switch dtype {
+    case .float64:
+      return NDArray(shape: shape, storage: .float64([Double](repeating: 1, count: count)))
+    case .int64:
+      return NDArray(shape: shape, storage: .int64([Int64](repeating: 1, count: count)))
+    case .bool:
+      return NDArray(shape: shape, storage: .bool([UInt8](repeating: 1, count: count)))
+    case .complex128:
+      return NDArray(shape: shape, storage: .complex128(
+        real: [Double](repeating: 1, count: count),
+        imag: [Double](repeating: 0, count: count)))
+    case .date:
+      return NDArray(shape: shape, storage: .date([Double](repeating: 1, count: count)))
+    }
   }
 
   /// Create an array filled with a constant real value. Equivalent to NumPy's `numpy.full`.
@@ -45,10 +67,21 @@ extension NDArray {
   ///   - dtype: Element type (default `.float64`).
   /// - Returns: A new constant-filled `NDArray`.
   public static func full(_ shape: [Int], value: Double, dtype: ArrayDType = .float64) -> NDArray {
-    let size = shape.reduce(1, *)
-    let real = [Double](repeating: value, count: size)
-    let imag: [Double]? = dtype == .complex128 ? [Double](repeating: 0, count: size) : nil
-    return NDArray(shape: shape, dtype: dtype, real: real, imag: imag)
+    let count = shape.reduce(1, *)
+    switch dtype {
+    case .float64:
+      return NDArray(shape: shape, storage: .float64([Double](repeating: value, count: count)))
+    case .int64:
+      return NDArray(shape: shape, storage: .int64([Int64](repeating: Int64(value), count: count)))
+    case .bool:
+      return NDArray(shape: shape, storage: .bool([UInt8](repeating: value != 0 ? 1 : 0, count: count)))
+    case .complex128:
+      return NDArray(shape: shape, storage: .complex128(
+        real: [Double](repeating: value, count: count),
+        imag: [Double](repeating: 0, count: count)))
+    case .date:
+      return NDArray(shape: shape, storage: .date([Double](repeating: value, count: count)))
+    }
   }
 
   /// Create a `.complex128` array filled with a constant complex value.

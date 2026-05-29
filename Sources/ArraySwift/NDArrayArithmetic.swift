@@ -16,76 +16,111 @@ extension NDArray {
 
   /// Negate all elements.
   public func negated() -> NDArray {
-    var result = [Double](repeating: 0, count: size)
-    vDSP_vnegD(real, 1, &result, 1, vDSP_Length(size))
-
-    if isComplex, let imagPart = imag {
-      var resultImag = [Double](repeating: 0, count: size)
-      vDSP_vnegD(imagPart, 1, &resultImag, 1, vDSP_Length(size))
-      return NDArray(shape: shape, dtype: .complex128, real: result, imag: resultImag)
+    switch storage {
+    case .int64(let d):
+      return NDArray(shape: shape, int64Data: d.map { 0 &- $0 })
+    case .bool(let d):
+      // Negating bool treats false(0) as 0 and true(1) as -1 after int promotion
+      return NDArray(shape: shape, int64Data: d.map { Int64(0) &- Int64($0) })
+    case .complex128(let r, let im):
+      var negR = [Double](repeating: 0, count: size)
+      var negI = [Double](repeating: 0, count: size)
+      vDSP_vnegD(r, 1, &negR, 1, vDSP_Length(size))
+      vDSP_vnegD(im, 1, &negI, 1, vDSP_Length(size))
+      return NDArray(shape: shape, storage: .complex128(real: negR, imag: negI))
+    default:
+      var result = [Double](repeating: 0, count: size)
+      vDSP_vnegD(real, 1, &result, 1, vDSP_Length(size))
+      return NDArray(shape: shape, data: result)
     }
-
-    return NDArray(shape: shape, data: result)
   }
 
   // MARK: - Element-wise Binary Operations
 
   /// Add two arrays element-wise.
-  /// Supports broadcasting and complex arrays.
+  ///
+  /// Promotes operands to their common dtype before operating. Supports
+  /// broadcasting, complex, int64, and bool arrays.
   public func add(_ other: NDArray) -> NDArray {
-    if isComplex || other.isComplex {
+    let target = ArrayDType.promote(dtype, other.dtype)
+    switch target {
+    case .complex128:
       let (a, b, _) = broadcast(self.promoteToComplex(), other.promoteToComplex())
       return complexAdd(a, b)
+    case .int64:
+      let (a, b, _) = broadcast(self.promoted(to: .int64), other.promoted(to: .int64))
+      return NDArray.int64Add(a, b)
+    default:
+      let (a, b, resultShape) = broadcast(self.promoted(to: .float64), other.promoted(to: .float64))
+      var result = [Double](repeating: 0, count: a.size)
+      vDSP_vaddD(a.real, 1, b.real, 1, &result, 1, vDSP_Length(a.size))
+      return NDArray(shape: resultShape, data: result)
     }
-
-    let (a, b, resultShape) = broadcast(self, other)
-    var result = [Double](repeating: 0, count: a.size)
-    vDSP_vaddD(a.real, 1, b.real, 1, &result, 1, vDSP_Length(a.size))
-    return NDArray(shape: resultShape, data: result)
   }
 
   /// Subtract two arrays element-wise.
-  /// Supports broadcasting and complex arrays.
+  ///
+  /// Promotes operands to their common dtype before operating. Supports
+  /// broadcasting, complex, int64, and bool arrays.
   public func subtract(_ other: NDArray) -> NDArray {
-    if isComplex || other.isComplex {
+    let target = ArrayDType.promote(dtype, other.dtype)
+    switch target {
+    case .complex128:
       let (a, b, _) = broadcast(self.promoteToComplex(), other.promoteToComplex())
       return complexSub(a, b)
+    case .int64:
+      let (a, b, _) = broadcast(self.promoted(to: .int64), other.promoted(to: .int64))
+      return NDArray.int64Sub(a, b)
+    default:
+      let (a, b, resultShape) = broadcast(self.promoted(to: .float64), other.promoted(to: .float64))
+      var result = [Double](repeating: 0, count: a.size)
+      // vDSP_vsubD computes B - A
+      vDSP_vsubD(b.real, 1, a.real, 1, &result, 1, vDSP_Length(a.size))
+      return NDArray(shape: resultShape, data: result)
     }
-
-    let (a, b, resultShape) = broadcast(self, other)
-    var result = [Double](repeating: 0, count: a.size)
-    // vDSP_vsubD computes B - A
-    vDSP_vsubD(b.real, 1, a.real, 1, &result, 1, vDSP_Length(a.size))
-    return NDArray(shape: resultShape, data: result)
   }
 
   /// Multiply two arrays element-wise.
-  /// Supports broadcasting and complex arrays.
+  ///
+  /// Promotes operands to their common dtype before operating. Supports
+  /// broadcasting, complex, int64, and bool arrays.
   public func multiply(_ other: NDArray) -> NDArray {
-    if isComplex || other.isComplex {
+    let target = ArrayDType.promote(dtype, other.dtype)
+    switch target {
+    case .complex128:
       let (a, b, _) = broadcast(self.promoteToComplex(), other.promoteToComplex())
       return complexMul(a, b)
+    case .int64:
+      let (a, b, _) = broadcast(self.promoted(to: .int64), other.promoted(to: .int64))
+      return NDArray.int64Mul(a, b)
+    default:
+      let (a, b, resultShape) = broadcast(self.promoted(to: .float64), other.promoted(to: .float64))
+      var result = [Double](repeating: 0, count: a.size)
+      vDSP_vmulD(a.real, 1, b.real, 1, &result, 1, vDSP_Length(a.size))
+      return NDArray(shape: resultShape, data: result)
     }
-
-    let (a, b, resultShape) = broadcast(self, other)
-    var result = [Double](repeating: 0, count: a.size)
-    vDSP_vmulD(a.real, 1, b.real, 1, &result, 1, vDSP_Length(a.size))
-    return NDArray(shape: resultShape, data: result)
   }
 
   /// Divide two arrays element-wise.
-  /// Supports broadcasting and complex arrays.
+  ///
+  /// Promotes operands to their common dtype before operating. Supports
+  /// broadcasting, complex, int64, and bool arrays.
   public func divide(_ other: NDArray) -> NDArray {
-    if isComplex || other.isComplex {
+    let target = ArrayDType.promote(dtype, other.dtype)
+    switch target {
+    case .complex128:
       let (a, b, _) = broadcast(self.promoteToComplex(), other.promoteToComplex())
       return complexDiv(a, b)
+    case .int64:
+      let (a, b, _) = broadcast(self.promoted(to: .int64), other.promoted(to: .int64))
+      return NDArray.int64Div(a, b)
+    default:
+      let (a, b, resultShape) = broadcast(self.promoted(to: .float64), other.promoted(to: .float64))
+      var result = [Double](repeating: 0, count: a.size)
+      // vDSP_vdivD computes B / A
+      vDSP_vdivD(b.real, 1, a.real, 1, &result, 1, vDSP_Length(a.size))
+      return NDArray(shape: resultShape, data: result)
     }
-
-    let (a, b, resultShape) = broadcast(self, other)
-    var result = [Double](repeating: 0, count: a.size)
-    // vDSP_vdivD computes B / A
-    vDSP_vdivD(b.real, 1, a.real, 1, &result, 1, vDSP_Length(a.size))
-    return NDArray(shape: resultShape, data: result)
   }
 
   /// Raise every element to a scalar power. Equivalent to NumPy's `numpy.power`.
@@ -690,7 +725,7 @@ private func complexDiv(_ a: NDArray, _ b: NDArray) -> NDArray {
 // MARK: - Broadcasting Helper
 
 /// Broadcast two arrays to compatible shapes.
-private func broadcast(_ a: NDArray, _ b: NDArray) -> (NDArray, NDArray, [Int]) {
+internal func broadcast(_ a: NDArray, _ b: NDArray) -> (NDArray, NDArray, [Int]) {
   if a.shape == b.shape {
     return (a, b, a.shape)
   }
@@ -720,7 +755,7 @@ private func broadcast(_ a: NDArray, _ b: NDArray) -> (NDArray, NDArray, [Int]) 
 }
 
 /// Broadcast an array to a new shape.
-private func broadcastTo(_ array: NDArray, shape: [Int]) -> NDArray {
+internal func broadcastTo(_ array: NDArray, shape: [Int]) -> NDArray {
   if array.shape == shape { return array }
 
   let resultSize = shape.reduce(1, *)
@@ -908,113 +943,6 @@ extension NDArray {
     var result = [Double](repeating: 0, count: size)
     for i in 0..<size {
       result[i] = real[i] >= scalar ? 1.0 : 0.0
-    }
-    return NDArray(shape: shape, data: result)
-  }
-
-  // MARK: - Special Value Checks
-
-  /// Element-wise check for NaN values.
-  /// Returns NDArray with 1.0 where NaN, 0.0 otherwise.
-  public func isnan() -> NDArray {
-    var result = [Double](repeating: 0, count: size)
-    for i in 0..<size {
-      result[i] = real[i].isNaN ? 1.0 : 0.0
-    }
-    return NDArray(shape: shape, data: result)
-  }
-
-  /// Element-wise check for infinite values.
-  /// Returns NDArray with 1.0 where infinite, 0.0 otherwise.
-  public func isinf() -> NDArray {
-    var result = [Double](repeating: 0, count: size)
-    for i in 0..<size {
-      result[i] = real[i].isInfinite ? 1.0 : 0.0
-    }
-    return NDArray(shape: shape, data: result)
-  }
-
-  /// Element-wise check for finite values.
-  /// Returns NDArray with 1.0 where finite, 0.0 otherwise.
-  public func isfinite() -> NDArray {
-    var result = [Double](repeating: 0, count: size)
-    for i in 0..<size {
-      result[i] = real[i].isFinite ? 1.0 : 0.0
-    }
-    return NDArray(shape: shape, data: result)
-  }
-
-  /// Element-wise check for positive infinity.
-  /// Returns NDArray with 1.0 where +inf, 0.0 otherwise.
-  public func isposinf() -> NDArray {
-    var result = [Double](repeating: 0, count: size)
-    for i in 0..<size {
-      result[i] = (real[i].isInfinite && real[i] > 0) ? 1.0 : 0.0
-    }
-    return NDArray(shape: shape, data: result)
-  }
-
-  /// Element-wise check for negative infinity.
-  /// Returns NDArray with 1.0 where -inf, 0.0 otherwise.
-  public func isneginf() -> NDArray {
-    var result = [Double](repeating: 0, count: size)
-    for i in 0..<size {
-      result[i] = (real[i].isInfinite && real[i] < 0) ? 1.0 : 0.0
-    }
-    return NDArray(shape: shape, data: result)
-  }
-
-  // MARK: - Logical Operations
-
-  /// Element-wise logical AND.
-  /// Treats non-zero as true, returns 1.0 for true, 0.0 for false.
-  /// For complex arrays, an element is non-zero if either real or imaginary part is non-zero.
-  public func logicalAnd(_ other: NDArray) -> NDArray {
-    let (a, b, resultShape) = broadcast(self, other)
-    var result = [Double](repeating: 0, count: a.size)
-    for i in 0..<a.size {
-      let aTruthy = a.isNonZero(at: i)
-      let bTruthy = b.isNonZero(at: i)
-      result[i] = (aTruthy && bTruthy) ? 1.0 : 0.0
-    }
-    return NDArray(shape: resultShape, data: result)
-  }
-
-  /// Element-wise logical OR.
-  /// Treats non-zero as true, returns 1.0 for true, 0.0 for false.
-  /// For complex arrays, an element is non-zero if either real or imaginary part is non-zero.
-  public func logicalOr(_ other: NDArray) -> NDArray {
-    let (a, b, resultShape) = broadcast(self, other)
-    var result = [Double](repeating: 0, count: a.size)
-    for i in 0..<a.size {
-      let aTruthy = a.isNonZero(at: i)
-      let bTruthy = b.isNonZero(at: i)
-      result[i] = (aTruthy || bTruthy) ? 1.0 : 0.0
-    }
-    return NDArray(shape: resultShape, data: result)
-  }
-
-  /// Element-wise logical XOR.
-  /// Treats non-zero as true, returns 1.0 for true, 0.0 for false.
-  /// For complex arrays, an element is non-zero if either real or imaginary part is non-zero.
-  public func logicalXor(_ other: NDArray) -> NDArray {
-    let (a, b, resultShape) = broadcast(self, other)
-    var result = [Double](repeating: 0, count: a.size)
-    for i in 0..<a.size {
-      let aTruthy = a.isNonZero(at: i)
-      let bTruthy = b.isNonZero(at: i)
-      result[i] = (aTruthy != bTruthy) ? 1.0 : 0.0
-    }
-    return NDArray(shape: resultShape, data: result)
-  }
-
-  /// Element-wise logical NOT.
-  /// Treats non-zero as true, returns 1.0 where false, 0.0 where true.
-  /// For complex arrays, an element is non-zero if either real or imaginary part is non-zero.
-  public func logicalNot() -> NDArray {
-    var result = [Double](repeating: 0, count: size)
-    for i in 0..<size {
-      result[i] = isNonZero(at: i) ? 0.0 : 1.0
     }
     return NDArray(shape: shape, data: result)
   }
